@@ -1,0 +1,13 @@
+torch
+torchvision
+torchaudio
+streamlit
+pandas
+numpy
+plotly
+scikit-learn
+pillow
+pytest  # for testing
+black   # for code formatting
+flake8  # for linting
+python-dotenv  # for environment variables
