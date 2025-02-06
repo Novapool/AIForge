@@ -2,6 +2,14 @@ import streamlit as st
 import torch
 import pandas as pd
 from pathlib import Path
+import os
+import numpy as np
+import warnings
+
+from utils.visualization import DataVisualizer
+
+warnings.filterwarnings('ignore', message='Examining the path of torch.classes.*')
+
 
 # Page config should be the first streamlit command
 st.set_page_config(
@@ -49,40 +57,116 @@ def main():
 def render_data_management():
     st.header("Data Management")
     
-    # File upload section
-    uploaded_file = st.file_uploader(
-        "Upload your dataset", 
-        type=['csv', 'xlsx', 'png', 'jpg', 'jpeg'],
-        help="Supported formats: CSV, Excel, Images"
-    )
+    tabs = st.tabs(["Upload & Preview", "Analysis & Visualization", "Preprocessing", "TensorBoard"])
     
-    if uploaded_file is not None:
-        if uploaded_file.name.endswith(('.csv', '.xlsx')):
+    with tabs[0]:  # Upload & Preview
+        uploaded_file = st.file_uploader(
+            "Upload your dataset", 
+            type=['csv', 'xlsx', 'png', 'jpg', 'jpeg'],
+            help="Supported formats: CSV, Excel, Images"
+        )
+        
+        if uploaded_file is not None:
+            if uploaded_file.name.endswith(('.csv', '.xlsx')):
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(uploaded_file)
+                    
+                    st.session_state['current_df'] = df  # Store in session state
+                    st.success(f"Successfully loaded dataset with shape: {df.shape}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Data Preview")
+                        st.dataframe(df.head(), use_container_width=True)
+                    
+                    with col2:
+                        st.subheader("Data Info")
+                        summary_stats = DataVisualizer.generate_summary_stats(df)
+                        st.write("Summary Statistics:")
+                        for key, value in summary_stats.items():
+                            if key == 'memory_usage':
+                                st.metric(key.replace('_', ' ').title(), f"{value:.2f} MB")
+                            else:
+                                st.metric(key.replace('_', ' ').title(), value)
+                
+                except Exception as e:
+                    st.error(f"Error loading file: {str(e)}")
+            else:
+                st.image(uploaded_file, caption=uploaded_file.name)
+    
+    with tabs[1]:  # Analysis & Visualization
+        if 'current_df' in st.session_state:
+            df = st.session_state['current_df']
+            
+            st.subheader("Data Analysis")
+            
+            # Correlation Matrix
+            st.write("### Correlation Matrix")
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 1:
+                corr_fig = DataVisualizer.generate_correlation_matrix(df, numeric_cols)
+                st.plotly_chart(corr_fig, use_container_width=True)
+            
+            # Distribution Plots
+            st.write("### Distribution Analysis")
+            selected_column = st.selectbox("Select column for distribution analysis", numeric_cols)
+            if selected_column:
+                dist_fig = DataVisualizer.generate_distribution_plot(df, selected_column)
+                st.plotly_chart(dist_fig, use_container_width=True)
+            
+            # Missing Values
+            st.write("### Missing Values Analysis")
+            missing_fig = DataVisualizer.generate_missing_values_chart(df)
+            st.plotly_chart(missing_fig, use_container_width=True)
+    
+    with tabs[2]:  # Preprocessing
+        if 'current_df' in st.session_state:
+            st.subheader("Data Preprocessing")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("### Handle Missing Values")
+                missing_strategy = st.selectbox(
+                    "Strategy for missing values",
+                    ["Drop rows", "Mean/Mode imputation", "Forward fill", "Backward fill"]
+                )
+                
+                if st.button("Apply Missing Values Strategy"):
+                    # TODO: Implement missing values handling
+                    pass
+            
+            with col2:
+                st.write("### Normalization")
+                normalize_method = st.selectbox(
+                    "Normalization method",
+                    ["Min-Max Scaling", "Standard Scaling", "Robust Scaling"]
+                )
+                
+                if st.button("Apply Normalization"):
+                    # TODO: Implement normalization
+                    pass
+    
+    with tabs[3]:  # TensorBoard
+        st.subheader("TensorBoard Integration")
+        if st.button("Launch TensorBoard"):
             try:
-                if uploaded_file.name.endswith('.csv'):
-                    df = pd.read_csv(uploaded_file)
-                else:
-                    df = pd.read_excel(uploaded_file)
+                import webbrowser
+                from torch.utils.tensorboard import SummaryWriter
                 
-                st.success(f"Successfully loaded dataset with shape: {df.shape}")
+                # Create a logs directory if it doesn't exist
+                log_dir = "logs"
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
                 
-                # Basic data preview
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("Data Preview")
-                    st.dataframe(df.head(), use_container_width=True)
-                
-                with col2:
-                    st.subheader("Data Info")
-                    buffer = pd.StringIO()
-                    df.info(buf=buffer)
-                    st.text(buffer.getvalue())
-                
+                # Launch TensorBoard
+                writer = SummaryWriter(log_dir)
+                webbrowser.open("http://localhost:6006")
+                st.success("TensorBoard launched! If it doesn't open automatically, visit http://localhost:6006")
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
-        else:
-            # Image preview
-            st.image(uploaded_file, caption=uploaded_file.name)
+                st.error(f"Error launching TensorBoard: {str(e)}")
 
 def render_model_development():
     st.header("Model Development")

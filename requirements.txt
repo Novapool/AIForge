@@ -11,3 +11,5 @@ pytest  # for testing
 black   # for code formatting
 flake8  # for linting
 python-dotenv  # for environment variables
+tensorboard
+plotly
