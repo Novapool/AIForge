@@ -12,4 +12,5 @@ black   # for code formatting
 flake8  # for linting
 python-dotenv  # for environment variables
 tensorboard
-plotly
+openpyxl  # for Excel file support
+matplotlib  # for additional plotting capabilities

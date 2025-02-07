@@ -54,6 +54,17 @@ class DataVisualizer:
         return fig
     
     @staticmethod
+    def process_batch_files(files: List[pd.DataFrame]) -> Dict:
+        """Process multiple files and generate combined statistics"""
+        combined_stats = {
+            "total_files": len(files),
+            "total_rows": sum(len(df) for df in files),
+            "file_sizes": [len(df) for df in files],
+            "memory_usage": sum(df.memory_usage(deep=True).sum() / 1024**2 for df in files)
+        }
+        return combined_stats
+
+    @staticmethod
     def generate_summary_stats(df: pd.DataFrame) -> Dict:
         """Generate summary statistics for the dataset"""
         numeric_cols = df.select_dtypes(include=[np.number]).columns
