@@ -7,27 +7,29 @@ import numpy as np
 import warnings
 
 from utils.visualization import DataVisualizer
+from utils.directory_handler import DirectoryHandler
 
 warnings.filterwarnings('ignore', message='Examining the path of torch.classes.*')
 
 
+
 # Page config should be the first streamlit command
 st.set_page_config(
-    page_title="AI Development Assistant",
+    page_title="AIForge",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': 'https://github.com/Novapool/AIForge',
         'Report a bug': 'https://github.com/Novapool/AIForge/issues',
-        'About': 'AI Development Assistant - Making AI Development Accessible'
+        'About': 'AIForge - Making AI Development Accessible'
     }
 )
 
 def main():
     # Sidebar
     with st.sidebar:
-        st.title("🤖 AI Dev Assistant")
+        st.title("AIForge")
         
         # Main navigation
         page = st.radio(
@@ -57,167 +59,126 @@ def main():
 def render_data_management():
     st.header("Data Management")
     
+    # Initialize session state
+    if 'directory_path' not in st.session_state:
+        st.session_state['directory_path'] = ''
+    
     tabs = st.tabs(["Upload & Preview", "Analysis & Visualization", "Preprocessing", "TensorBoard"])
     
     with tabs[0]:  # Upload & Preview
         st.write("### Data Upload")
         upload_type = st.radio(
             "Choose upload type:",
-            ["Single File", "Multiple Files"],
+            ["Single File", "Directory"],
             horizontal=True
         )
         
-        if upload_type == "Single File":
+        if upload_type == "Directory":
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                # Display the path from session state
+                st.text_input(
+                    "Selected Directory:", 
+                    value=st.session_state['directory_path'],
+                    disabled=True,
+                    key='directory_display'
+                )
+            with col2:
+                if st.button("Browse Directory", key="browse_btn"):
+                    directory = DirectoryHandler.select_directory()
+                    if directory:
+                        st.session_state['directory_path'] = directory
+                        st.rerun()  # Updated from experimental_rerun()
+            
+            if st.session_state['directory_path']:
+                st.write("### Dataset Structure")
+                # Get and display directory structure
+                structure = DirectoryHandler.get_directory_structure(st.session_state['directory_path'])
+                if structure:
+                    DirectoryHandler.display_structure(structure)
+                    
+                    # Load and process data files
+                    data_files = DirectoryHandler.load_data_files(structure)
+                    
+                    if data_files:
+                        st.write("### Data Files")
+                        # Create tabs for each data file
+                        file_tabs = st.tabs([f"File: {name}" for name in data_files.keys()])
+                        
+                        processed_dfs = []
+                        for name, df in data_files.items():
+                            with file_tabs[list(data_files.keys()).index(name)]:
+                                processed_dfs.append(df)
+                                
+                                st.success(f"Successfully loaded dataset with shape: {df.shape}")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.subheader("Data Preview")
+                                    st.dataframe(df.head(), use_container_width=True)
+                                
+                                with col2:
+                                    st.subheader("Data Info")
+                                    summary_stats = DataVisualizer.generate_summary_stats(df)
+                                    st.write("Summary Statistics:")
+                                    for key, value in summary_stats.items():
+                                        if key == 'memory_usage':
+                                            st.metric(key.replace('_', ' ').title(), f"{value:.2f} MB")
+                                        else:
+                                            st.metric(key.replace('_', ' ').title(), value)
+                        
+                        # Add batch summary if multiple files are loaded
+                        if len(processed_dfs) > 1:
+                            st.write("### Batch Summary")
+                            batch_stats = DataVisualizer.process_batch_files(processed_dfs)
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Files", batch_stats["total_files"])
+                            with col2:
+                                st.metric("Total Rows", batch_stats["total_rows"])
+                            with col3:
+                                st.metric("Total Memory Usage", f"{batch_stats['memory_usage']:.2f} MB")
+                        
+                        # Store in session state
+                        st.session_state['current_dfs'] = data_files
+                
+        else:  # Single File upload logic remains the same
             uploaded_file = st.file_uploader(
                 "Upload your dataset", 
                 type=['csv', 'xlsx', 'png', 'jpg', 'jpeg'],
                 help="Supported formats: CSV, Excel, Images"
             )
-            files_to_process = [uploaded_file] if uploaded_file else []
-        else:
-            uploaded_files = st.file_uploader(
-                "Upload multiple files", 
-                type=['csv', 'xlsx', 'png', 'jpg', 'jpeg'],
-                accept_multiple_files=True,
-                help="You can select multiple files to upload"
-            )
-            files_to_process = uploaded_files if uploaded_files else []
-        
-        if files_to_process:
-            # Create tabs for each file
-            file_tabs = st.tabs([f"File {i+1}: {file.name}" for i, file in enumerate(files_to_process)])
-            
-            processed_dfs = []
-            for i, (file, tab) in enumerate(zip(files_to_process, file_tabs)):
-                with tab:
-                    if file.name.endswith(('.csv', '.xlsx')):
-                        try:
-                            if file.name.endswith('.csv'):
-                                df = pd.read_csv(file)
-                            else:
-                                df = pd.read_excel(file)
-                            
-                            processed_dfs.append(df)
-                            if 'current_dfs' not in st.session_state:
-                                st.session_state['current_dfs'] = {}
-                            st.session_state['current_dfs'][file.name] = df  # Store in session state
-                            
-                            st.success(f"Successfully loaded dataset with shape: {df.shape}")
-                            
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.subheader("Data Preview")
-                                st.dataframe(df.head(), use_container_width=True)
-                            
-                            with col2:
-                                st.subheader("Data Info")
-                                summary_stats = DataVisualizer.generate_summary_stats(df)
-                                st.write("Summary Statistics:")
-                                for key, value in summary_stats.items():
-                                    if key == 'memory_usage':
-                                        st.metric(key.replace('_', ' ').title(), f"{value:.2f} MB")
-                                    else:
-                                        st.metric(key.replace('_', ' ').title(), value)
+            if uploaded_file:
+                if uploaded_file.name.endswith(('.csv', '.xlsx')):
+                    try:
+                        if uploaded_file.name.endswith('.csv'):
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
                         
-                        except Exception as e:
-                            st.error(f"Error loading file: {str(e)}")
-                    else:
-                        st.image(file, caption=file.name)
-            
-            # Add batch summary if multiple files are uploaded
-            if len(processed_dfs) > 1:
-                st.write("### Batch Summary")
-                batch_stats = DataVisualizer.process_batch_files(processed_dfs)
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Files", batch_stats["total_files"])
-                with col2:
-                    st.metric("Total Rows", batch_stats["total_rows"])
-                with col3:
-                    st.metric("Total Memory Usage", f"{batch_stats['memory_usage']:.2f} MB")
-    
-    with tabs[1]:  # Analysis & Visualization
-        if 'current_dfs' in st.session_state:
-            st.subheader("Data Analysis")
-            
-            # File selection if multiple files are uploaded
-            selected_file = st.selectbox(
-                "Select file to analyze",
-                list(st.session_state['current_dfs'].keys())
-            )
-            df = st.session_state['current_dfs'][selected_file]
-            
-            # Correlation Matrix
-            st.write("### Correlation Matrix")
-            numeric_cols = df.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 1:
-                corr_fig = DataVisualizer.generate_correlation_matrix(df, numeric_cols)
-                st.plotly_chart(corr_fig, use_container_width=True)
-            
-            # Distribution Plots
-            st.write("### Distribution Analysis")
-            selected_column = st.selectbox("Select column for distribution analysis", numeric_cols)
-            if selected_column:
-                dist_fig = DataVisualizer.generate_distribution_plot(df, selected_column)
-                st.plotly_chart(dist_fig, use_container_width=True)
-            
-            # Missing Values
-            st.write("### Missing Values Analysis")
-            missing_fig = DataVisualizer.generate_missing_values_chart(df)
-            st.plotly_chart(missing_fig, use_container_width=True)
-    
-    with tabs[2]:  # Preprocessing
-        if 'current_dfs' in st.session_state:
-            st.subheader("Data Preprocessing")
-            
-            # File selection if multiple files are uploaded
-            selected_file = st.selectbox(
-                "Select file to preprocess",
-                list(st.session_state['current_dfs'].keys()),
-                key="preprocess_file_select"
-            )
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("### Handle Missing Values")
-                missing_strategy = st.selectbox(
-                    "Strategy for missing values",
-                    ["Drop rows", "Mean/Mode imputation", "Forward fill", "Backward fill"]
-                )
-                
-                if st.button("Apply Missing Values Strategy"):
-                    # TODO: Implement missing values handling
-                    pass
-            
-            with col2:
-                st.write("### Normalization")
-                normalize_method = st.selectbox(
-                    "Normalization method",
-                    ["Min-Max Scaling", "Standard Scaling", "Robust Scaling"]
-                )
-                
-                if st.button("Apply Normalization"):
-                    # TODO: Implement normalization
-                    pass
-    
-    with tabs[3]:  # TensorBoard
-        st.subheader("TensorBoard Integration")
-        if st.button("Launch TensorBoard"):
-            try:
-                import webbrowser
-                from torch.utils.tensorboard import SummaryWriter
-                
-                # Create a logs directory if it doesn't exist
-                log_dir = "logs"
-                if not os.path.exists(log_dir):
-                    os.makedirs(log_dir)
-                
-                # Launch TensorBoard
-                writer = SummaryWriter(log_dir)
-                webbrowser.open("http://localhost:6006")
-                st.success("TensorBoard launched! If it doesn't open automatically, visit http://localhost:6006")
-            except Exception as e:
-                st.error(f"Error launching TensorBoard: {str(e)}")
+                        st.session_state['current_dfs'] = {uploaded_file.name: df}
+                        
+                        st.success(f"Successfully loaded dataset with shape: {df.shape}")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.subheader("Data Preview")
+                            st.dataframe(df.head(), use_container_width=True)
+                        
+                        with col2:
+                            st.subheader("Data Info")
+                            summary_stats = DataVisualizer.generate_summary_stats(df)
+                            st.write("Summary Statistics:")
+                            for key, value in summary_stats.items():
+                                if key == 'memory_usage':
+                                    st.metric(key.replace('_', ' ').title(), f"{value:.2f} MB")
+                                else:
+                                    st.metric(key.replace('_', ' ').title(), value)
+                    
+                    except Exception as e:
+                        st.error(f"Error loading file: {str(e)}")
+                else:
+                    st.image(uploaded_file, caption=uploaded_file.name)
 
 def render_model_development():
     st.header("Model Development")
