@@ -237,6 +237,9 @@ def render_preprocessing_tab():
         "Outlier Removal"
     ])
     
+    # Track if any preprocessing was applied
+    preprocessing_applied = False
+    
     # Categorical Encoding Tab
     with preprocess_tabs[0]:
         st.write("### Encode Categorical Variables")
@@ -267,6 +270,7 @@ def render_preprocessing_tab():
                     )
                     # Update the DataFrame in session state
                     st.session_state['current_dfs'][selected_dataset] = df
+                    preprocessing_applied = True
                     
                     # Show encoding mappings
                     st.write("### Encoding Mappings")
@@ -316,6 +320,7 @@ def render_preprocessing_tab():
                     columns=selected_cols
                 )
                 st.session_state['current_dfs'][selected_dataset] = df
+                preprocessing_applied = True
                 st.success("Normalization applied successfully!")
                 
                 # Show sample of normalized data
@@ -353,7 +358,18 @@ def render_preprocessing_tab():
                         columns=selected_cols
                     )
                     st.session_state['current_dfs'][selected_dataset] = df
+                    preprocessing_applied = True
                     st.success("Missing values handled successfully!")
+                    
+                    # Show impact of missing value treatment
+                    st.write("### Impact of Missing Value Treatment")
+                    for col in selected_cols:
+                        missing_before = df[col].isnull().sum()
+                        if missing_before == 0:
+                            st.write(f"✅ {col}: All missing values handled")
+                        else:
+                            st.warning(f"⚠️ {col}: {missing_before} missing values remain")
+                            
                 except Exception as e:
                     st.error(f"Error handling missing values: {str(e)}")
         else:
@@ -388,6 +404,7 @@ def render_preprocessing_tab():
             
         if st.button("Remove Outliers"):
             try:
+                original_shape = df.shape[0]
                 df = st.session_state['preprocessor'].remove_outliers(
                     df,
                     method=selected_method,
@@ -395,27 +412,34 @@ def render_preprocessing_tab():
                     columns=selected_cols
                 )
                 st.session_state['current_dfs'][selected_dataset] = df
+                preprocessing_applied = True
                 st.success("Outliers removed successfully!")
                 
                 # Show impact of outlier removal
                 st.write("### Impact of Outlier Removal")
-                original_shape = st.session_state['current_dfs'][selected_dataset].shape[0]
                 new_shape = df.shape[0]
                 removed_rows = original_shape - new_shape
                 st.write(f"Rows removed: {removed_rows} ({(removed_rows/original_shape)*100:.2f}% of data)")
+                
+                # Show statistics for each column
+                st.write("### Column Statistics After Outlier Removal")
+                stats_df = df[selected_cols].describe()
+                st.dataframe(stats_df)
+                
             except Exception as e:
                 st.error(f"Error removing outliers: {str(e)}")
     
     # Display preprocessing summary
-    st.write("---")
-    st.write("### Preprocessing Summary")
-    summary = st.session_state['preprocessor'].get_preprocessing_summary()
-    st.write(f"Total operations performed: {summary['total_operations']}")
-    
-    if summary['operations']:
-        for op in summary['operations']:
-            st.write(f"- {op['operation'].title()}: {op['method']} "
-                    f"on {len(op['columns'])} columns")
+    if preprocessing_applied:
+        st.write("---")
+        st.write("### Preprocessing Summary")
+        summary = st.session_state['preprocessor'].get_preprocessing_summary()
+        st.write(f"Total operations performed: {summary['total_operations']}")
+        
+        if summary['operations']:
+            for op in summary['operations']:
+                st.write(f"- {op['operation'].title()}: {op['method']} "
+                        f"on {len(op['columns'])} columns")
     
     # Save Changes Section
     st.write("---")
@@ -431,6 +455,7 @@ def render_preprocessing_tab():
     with col2:
         if st.button("Save Changes"):
             if selected_dataset and df is not None:
+                # Pass the current DataFrame to save_processed_data
                 save_processed_data(df, selected_dataset)
             else:
                 st.warning("No data to save. Please load and process data first.")
@@ -447,34 +472,42 @@ def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
         filename = f"processed_{original_filename.split('.')[0]}_{timestamp}.csv"
         save_path = save_dir / filename
         
-        # Important: Convert any integer-encoded categorical columns to integers
-        # before saving to ensure proper data type preservation
-        categorical_columns = df.select_dtypes(include=['int64']).columns
-        df[categorical_columns] = df[categorical_columns].astype('int64')
+        # Important: Ensure all columns are properly formatted
+        # Convert any categorical columns that were encoded to integers
+        categorical_columns = [col for col in df.columns 
+                             if df[col].dtype in ['int64', 'float64'] 
+                             and col in st.session_state['preprocessor'].encoders]
         
-        # Save with explicit data types
+        for col in categorical_columns:
+            df[col] = df[col].astype('int64')
+        
+        # Save with index=False to avoid extra index column
         df.to_csv(save_path, index=False)
         
-        # Verify the save
-        saved_df = pd.read_csv(save_path)
-        print("Verification of saved data types:")
-        print(saved_df.dtypes)
-        
-        st.success(f"Successfully saved processed data to: {save_path}")
-        
         # Save the encoding mappings if they exist
-        if 'preprocessor' in st.session_state:
+        if hasattr(st.session_state, 'preprocessor') and st.session_state['preprocessor'].encoders:
             mapping_file = save_dir / f"mappings_{timestamp}.json"
             mappings = {}
             for col, encoder in st.session_state['preprocessor'].encoders.items():
                 if hasattr(encoder, 'classes_'):
-                    mappings[col] = {label: int(i) for i, label in enumerate(encoder.classes_)}
+                    mappings[col] = {
+                        str(label): int(i) 
+                        for i, label in enumerate(encoder.classes_)
+                    }
             
             with open(mapping_file, 'w') as f:
                 json.dump(mappings, f, indent=2)
-                
+            
+            st.success(f"Successfully saved processed data to: {save_path}")
             st.info(f"Encoding mappings saved to: {mapping_file}")
             
+            # Verify the save by reading back the file
+            saved_df = pd.read_csv(save_path)
+            if saved_df.equals(df):
+                st.success("✅ Verification: Saved data matches processed data")
+            else:
+                st.warning("⚠️ Warning: Saved data might differ from processed data")
+                
     except Exception as e:
         st.error(f"Error saving file: {str(e)}")
 
