@@ -454,15 +454,20 @@ def render_preprocessing_tab():
         )
     with col2:
         if st.button("Save Changes"):
-            if selected_dataset and df is not None:
-                # Pass the current DataFrame to save_processed_data
-                save_processed_data(df, selected_dataset)
+            if selected_dataset and 'current_dfs' in st.session_state:
+                # Get the processed DataFrame from session state
+                processed_df = st.session_state['current_dfs'][selected_dataset]
+                save_processed_data(processed_df, selected_dataset)
             else:
                 st.warning("No data to save. Please load and process data first.")
 
 def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
     """Save the processed DataFrame to a CSV file"""
     try:
+        # Add debug logging
+        st.write("Debug: DataFrame shape before save:", df.shape)
+        st.write("Debug: DataFrame columns:", df.columns.tolist())
+        
         # Create processed_data directory if it doesn't exist
         save_dir = Path("ai_assistant/processed_data")
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -472,42 +477,19 @@ def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
         filename = f"processed_{original_filename.split('.')[0]}_{timestamp}.csv"
         save_path = save_dir / filename
         
-        # Important: Ensure all columns are properly formatted
-        # Convert any categorical columns that were encoded to integers
-        categorical_columns = [col for col in df.columns 
-                             if df[col].dtype in ['int64', 'float64'] 
-                             and col in st.session_state['preprocessor'].encoders]
-        
-        for col in categorical_columns:
-            df[col] = df[col].astype('int64')
-        
         # Save with index=False to avoid extra index column
         df.to_csv(save_path, index=False)
         
-        # Save the encoding mappings if they exist
-        if hasattr(st.session_state, 'preprocessor') and st.session_state['preprocessor'].encoders:
-            mapping_file = save_dir / f"mappings_{timestamp}.json"
-            mappings = {}
-            for col, encoder in st.session_state['preprocessor'].encoders.items():
-                if hasattr(encoder, 'classes_'):
-                    mappings[col] = {
-                        str(label): int(i) 
-                        for i, label in enumerate(encoder.classes_)
-                    }
+        # Verify save
+        saved_df = pd.read_csv(save_path)
+        st.write("Debug: Saved DataFrame shape:", saved_df.shape)
+        st.write("Debug: Saved DataFrame columns:", saved_df.columns.tolist())
+        
+        if saved_df.equals(df):
+            st.success("✅ Data saved and verified successfully")
+        else:
+            st.warning("⚠️ Warning: Saved data differs from processed data")
             
-            with open(mapping_file, 'w') as f:
-                json.dump(mappings, f, indent=2)
-            
-            st.success(f"Successfully saved processed data to: {save_path}")
-            st.info(f"Encoding mappings saved to: {mapping_file}")
-            
-            # Verify the save by reading back the file
-            saved_df = pd.read_csv(save_path)
-            if saved_df.equals(df):
-                st.success("✅ Verification: Saved data matches processed data")
-            else:
-                st.warning("⚠️ Warning: Saved data might differ from processed data")
-                
     except Exception as e:
         st.error(f"Error saving file: {str(e)}")
 
