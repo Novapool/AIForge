@@ -10,6 +10,7 @@ import json
 from utils.visualization import DataVisualizer
 from utils.directory_handler import DirectoryHandler
 from data.data_preprocessor import DataPreprocessor
+from data.preprocessing_manager import PreprocessingManager
 
 
 warnings.filterwarnings('ignore', message='Examining the path of torch.classes.*')
@@ -215,30 +216,30 @@ def render_preprocessing_tab():
     """Render the preprocessing tab in the Streamlit interface"""
     st.subheader("Data Preprocessing")
     
+    # Initialize preprocessing manager if not exists
+    if 'preprocessing_manager' not in st.session_state:
+        st.session_state['preprocessing_manager'] = PreprocessingManager()
+    
     # Check if data is loaded
     if 'current_dfs' not in st.session_state:
         st.warning("Please load data first in the Upload & Preview tab")
         return
-        
+    
     # Select dataset if multiple are loaded
     dataset_names = list(st.session_state['current_dfs'].keys())
     selected_dataset = st.selectbox("Select Dataset", dataset_names)
-    df = st.session_state['current_dfs'][selected_dataset].copy()  # Important: create a copy
     
-    # Initialize preprocessor if not exists
-    if 'preprocessor' not in st.session_state:
-        st.session_state['preprocessor'] = DataPreprocessor()
+    # Get DataFrame
+    df = st.session_state['current_dfs'][selected_dataset].copy(deep=True)
     
     # Create tabs for different preprocessing operations
     preprocess_tabs = st.tabs([
         "Categorical Encoding",
         "Normalization",
         "Missing Values",
-        "Outlier Removal"
+        "Outlier Removal",
+        "Preprocessing States"
     ])
-    
-    # Track if any preprocessing was applied
-    preprocessing_applied = False
     
     # Categorical Encoding Tab
     with preprocess_tabs[0]:
@@ -261,36 +262,17 @@ def render_preprocessing_tab():
                     key="encode_cols"
                 )
                 
-            if st.button("Apply Encoding"):
-                try:
-                    df = st.session_state['preprocessor'].encode_categorical(
-                        df,
-                        method=selected_method,
-                        columns=selected_cols
-                    )
-                    # Update the DataFrame in session state
-                    st.session_state['current_dfs'][selected_dataset] = df
-                    preprocessing_applied = True
-                    
-                    # Show encoding mappings
-                    st.write("### Encoding Mappings")
-                    for col in selected_cols:
-                        if col in st.session_state['preprocessor'].encoders:
-                            encoder = st.session_state['preprocessor'].encoders[col]
-                            if hasattr(encoder, 'classes_'):
-                                st.write(f"\n{col} mapping:")
-                                mapping_df = pd.DataFrame({
-                                    'Original': encoder.classes_,
-                                    'Encoded': range(len(encoder.classes_))
-                                })
-                                st.dataframe(mapping_df)
-                    
-                    st.success("Encoding applied successfully!")
-                    
-                except Exception as e:
-                    st.error(f"Error applying encoding: {str(e)}")
-        else:
-            st.info("No categorical columns found in the dataset")
+            if st.button("Add Encoding Operation"):
+                operation = {
+                    'operation': 'encoding',
+                    'method': selected_method,
+                    'columns': selected_cols
+                }
+                file_id = st.session_state['preprocessing_manager'].save_state(
+                    selected_dataset,
+                    [operation]
+                )
+                st.success(f"Encoding operation added to preprocessing state")
     
     # Normalization Tab
     with preprocess_tabs[1]:
@@ -312,22 +294,17 @@ def render_preprocessing_tab():
                 key="norm_cols"
             )
             
-        if st.button("Apply Normalization"):
-            try:
-                df = st.session_state['preprocessor'].normalize_data(
-                    df,
-                    method=selected_method,
-                    columns=selected_cols
-                )
-                st.session_state['current_dfs'][selected_dataset] = df
-                preprocessing_applied = True
-                st.success("Normalization applied successfully!")
-                
-                # Show sample of normalized data
-                st.write("### Sample of Normalized Data")
-                st.dataframe(df[selected_cols].head())
-            except Exception as e:
-                st.error(f"Error applying normalization: {str(e)}")
+        if st.button("Add Normalization Operation"):
+            operation = {
+                'operation': 'normalization',
+                'method': selected_method,
+                'columns': selected_cols
+            }
+            file_id = st.session_state['preprocessing_manager'].save_state(
+                selected_dataset,
+                [operation]
+            )
+            st.success(f"Normalization operation added to preprocessing state")
     
     # Missing Values Tab
     with preprocess_tabs[2]:
@@ -350,28 +327,17 @@ def render_preprocessing_tab():
                     key="missing_cols"
                 )
             
-            if st.button("Apply Missing Value Treatment"):
-                try:
-                    df = st.session_state['preprocessor'].handle_missing_values(
-                        df,
-                        strategy=selected_strategy,
-                        columns=selected_cols
-                    )
-                    st.session_state['current_dfs'][selected_dataset] = df
-                    preprocessing_applied = True
-                    st.success("Missing values handled successfully!")
-                    
-                    # Show impact of missing value treatment
-                    st.write("### Impact of Missing Value Treatment")
-                    for col in selected_cols:
-                        missing_before = df[col].isnull().sum()
-                        if missing_before == 0:
-                            st.write(f"✅ {col}: All missing values handled")
-                        else:
-                            st.warning(f"⚠️ {col}: {missing_before} missing values remain")
-                            
-                except Exception as e:
-                    st.error(f"Error handling missing values: {str(e)}")
+            if st.button("Add Missing Value Operation"):
+                operation = {
+                    'operation': 'missing_values',
+                    'strategy': selected_strategy,
+                    'columns': selected_cols
+                }
+                file_id = st.session_state['preprocessing_manager'].save_state(
+                    selected_dataset,
+                    [operation]
+                )
+                st.success(f"Missing value operation added to preprocessing state")
         else:
             st.info("No missing values found in the dataset")
     
@@ -402,71 +368,116 @@ def render_preprocessing_tab():
                 key="outlier_cols"
             )
             
-        if st.button("Remove Outliers"):
+        if st.button("Add Outlier Operation"):
+            operation = {
+                'operation': 'outliers',
+                'method': selected_method,
+                'threshold': threshold,
+                'columns': selected_cols
+            }
+            file_id = st.session_state['preprocessing_manager'].save_state(
+                selected_dataset,
+                [operation]
+            )
+            st.success(f"Outlier removal operation added to preprocessing state")
+    
+    # Preprocessing States Tab
+    with preprocess_tabs[4]:
+        st.write("### Manage Preprocessing States")
+        
+        # List all preprocessing states
+        states = st.session_state['preprocessing_manager'].list_states()
+        
+        if states:
+            for state in states:
+                with st.expander(f"{state['dataset_name']} - {state['created_at']}"):
+                    st.write(f"Status: {state['status']}")
+                    st.write(f"Operations: {state['operation_count']}")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("View Details", key=f"view_{state['file_id']}"):
+                            details = st.session_state['preprocessing_manager'].view_state_history(
+                                state['file_id']
+                            )
+                            if details:
+                                st.json(details)
+                    
+                    with col2:
+                        if st.button("Delete", key=f"delete_{state['file_id']}"):
+                            if st.session_state['preprocessing_manager'].delete_state(
+                                state['file_id']
+                            ):
+                                st.success("State file deleted")
+                                st.rerun()
+        else:
+            st.info("No preprocessing states found")
+    
+    # Apply and Save Section
+    st.write("---")
+    st.write("### Apply and Save Preprocessing")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Apply Preprocessing"):
             try:
-                original_shape = df.shape[0]
-                df = st.session_state['preprocessor'].remove_outliers(
-                    df,
-                    method=selected_method,
-                    threshold=threshold,
-                    columns=selected_cols
-                )
-                st.session_state['current_dfs'][selected_dataset] = df
-                preprocessing_applied = True
-                st.success("Outliers removed successfully!")
+                # Get all pending states for this dataset
+                states = [
+                    state for state in st.session_state['preprocessing_manager'].list_states()
+                    if state['dataset_name'] == selected_dataset 
+                    and state['status'] == 'pending'
+                ]
                 
-                # Show impact of outlier removal
-                st.write("### Impact of Outlier Removal")
-                new_shape = df.shape[0]
-                removed_rows = original_shape - new_shape
-                st.write(f"Rows removed: {removed_rows} ({(removed_rows/original_shape)*100:.2f}% of data)")
+                if not states:
+                    st.warning("No pending preprocessing operations found")
+                    return
                 
-                # Show statistics for each column
-                st.write("### Column Statistics After Outlier Removal")
-                stats_df = df[selected_cols].describe()
-                st.dataframe(stats_df)
+                # Apply operations from each state
+                df = st.session_state['current_dfs'][selected_dataset].copy(deep=True)
+                
+                for state in states:
+                    df = st.session_state['preprocessing_manager'].apply_operations(
+                        df,
+                        state['file_id']
+                    )
+                
+                # Save processed DataFrame
+                timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                output_path = f"ai_assistant/processed_data/processed_{selected_dataset}_{timestamp}.csv"
+                
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                
+                # Save the processed DataFrame
+                df.to_csv(output_path, index=False)
+                
+                st.success(f"Preprocessing applied and data saved to: {output_path}")
                 
             except Exception as e:
-                st.error(f"Error removing outliers: {str(e)}")
+                st.error(f"Error applying preprocessing: {str(e)}")
     
-    # Display preprocessing summary
-    if preprocessing_applied:
-        st.write("---")
-        st.write("### Preprocessing Summary")
-        summary = st.session_state['preprocessor'].get_preprocessing_summary()
-        st.write(f"Total operations performed: {summary['total_operations']}")
-        
-        if summary['operations']:
-            for op in summary['operations']:
-                st.write(f"- {op['operation'].title()}: {op['method']} "
-                        f"on {len(op['columns'])} columns")
-    
-    # Save Changes Section
-    st.write("---")
-    st.write("### Save Processed Data")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        save_dir = st.text_input(
-            "Save Directory",
-            value="ai_assistant/processed_data",
-            disabled=True
-        )
     with col2:
-        if st.button("Save Changes"):
-            if selected_dataset and 'current_dfs' in st.session_state:
-                # Get the processed DataFrame from session state
-                processed_df = st.session_state['current_dfs'][selected_dataset]
-                save_processed_data(processed_df, selected_dataset)
-            else:
-                st.warning("No data to save. Please load and process data first.")
+        if st.button("Reset All"):
+            # Get all states for this dataset
+            states = [
+                state for state in st.session_state['preprocessing_manager'].list_states()
+                if state['dataset_name'] == selected_dataset
+            ]
+            
+            # Delete each state
+            for state in states:
+                st.session_state['preprocessing_manager'].delete_state(state['file_id'])
+            
+            st.success("All preprocessing states cleared")
+            st.rerun()
 
 def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
-    """Save the processed DataFrame to a CSV file"""
+    """Save the processed DataFrame to a CSV file with verification"""
     try:
-        # Add debug logging
-        st.write("Debug: DataFrame shape before save:", df.shape)
-        st.write("Debug: DataFrame columns:", df.columns.tolist())
+        # Create a deep copy of the DataFrame to avoid modifying the original
+        df_to_save = df.copy(deep=True)
         
         # Create processed_data directory if it doesn't exist
         save_dir = Path("ai_assistant/processed_data")
@@ -477,21 +488,80 @@ def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
         filename = f"processed_{original_filename.split('.')[0]}_{timestamp}.csv"
         save_path = save_dir / filename
         
+        # Convert DataFrame to specific dtypes before saving
+        df_to_save = df_to_save.convert_dtypes()
+        
+        # Store original dtypes for verification
+        original_dtypes = df_to_save.dtypes.to_dict()
+        
         # Save with index=False to avoid extra index column
-        df.to_csv(save_path, index=False)
+        df_to_save.to_csv(save_path, index=False)
         
-        # Verify save
+        # Verify save by reading back the file
         saved_df = pd.read_csv(save_path)
-        st.write("Debug: Saved DataFrame shape:", saved_df.shape)
-        st.write("Debug: Saved DataFrame columns:", saved_df.columns.tolist())
         
-        if saved_df.equals(df):
-            st.success("✅ Data saved and verified successfully")
+        # Convert saved DataFrame to match original dtypes
+        for col, dtype in original_dtypes.items():
+            try:
+                saved_df[col] = saved_df[col].astype(dtype)
+            except Exception as type_error:
+                st.warning(f"⚠️ Warning: Could not convert column {col} to type {dtype}: {str(type_error)}")
+        
+        # Detailed verification
+        verification_passed = True
+        verification_messages = []
+        
+        # Check structure
+        if df_to_save.shape != saved_df.shape:
+            verification_messages.append(f"❌ Shape mismatch: Original {df_to_save.shape} vs Saved {saved_df.shape}")
+            verification_passed = False
+            
+        if not all(df_to_save.columns == saved_df.columns):
+            verification_messages.append("❌ Column names or order mismatch")
+            verification_passed = False
+        
+        # Check data content
+        numeric_cols = df_to_save.select_dtypes(include=[np.number]).columns
+        non_numeric_cols = df_to_save.select_dtypes(exclude=[np.number]).columns
+        
+        # Verify numeric columns (with tolerance for floating point differences)
+        for col in numeric_cols:
+            if not np.allclose(
+                df_to_save[col].fillna(0),
+                saved_df[col].fillna(0),
+                rtol=1e-05,
+                atol=1e-08,
+                equal_nan=True
+            ):
+                verification_messages.append(f"❌ Numeric data mismatch in column: {col}")
+                verification_passed = False
+        
+        # Verify non-numeric columns
+        for col in non_numeric_cols:
+            if not df_to_save[col].fillna('').equals(saved_df[col].fillna('')):
+                verification_messages.append(f"❌ Non-numeric data mismatch in column: {col}")
+                verification_passed = False
+        
+        # Display verification results
+        if verification_passed:
+            st.success(f"✅ Data successfully saved and verified: {filename}")
+            # Store the save path in session state for reference
+            st.session_state['last_saved_file'] = str(save_path)
+            
+            # Display summary of saved data
+            st.write("### Save Summary")
+            st.write(f"- Total rows: {saved_df.shape[0]}")
+            st.write(f"- Total columns: {saved_df.shape[1]}")
+            st.write(f"- Numeric columns: {len(numeric_cols)}")
+            st.write(f"- Non-numeric columns: {len(non_numeric_cols)}")
         else:
-            st.warning("⚠️ Warning: Saved data differs from processed data")
+            st.error("❌ Save verification failed:")
+            for msg in verification_messages:
+                st.write(msg)
             
     except Exception as e:
         st.error(f"Error saving file: {str(e)}")
+        raise e
 
 def render_results():
 

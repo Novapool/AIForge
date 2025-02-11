@@ -70,11 +70,8 @@ class DataPreprocessor:
         if not scaler:
             raise ValueError(f"Unknown normalization method: {method}")
             
-        # Create a copy to avoid modifying the original DataFrame
-        df_copy = df.copy()
-        
-        # Normalize selected columns
-        df_copy[columns] = scaler.fit_transform(df_copy[columns])
+        # Normalize selected columns in place
+        df[columns] = scaler.fit_transform(df[columns])
         
         self.preprocessing_history.append({
             'operation': 'normalization',
@@ -82,7 +79,7 @@ class DataPreprocessor:
             'columns': list(columns)
         })
         
-        return df_copy
+        return df
     
     def encode_categorical(self,
                          df: pd.DataFrame,
@@ -96,49 +93,60 @@ class DataPreprocessor:
             method: One of 'label' or 'onehot'
             columns: List of columns to encode. If None, encodes all object columns
         """
-        # Create a copy of the DataFrame to avoid modifying the original
-        df_copy = df.copy()
+        # Create a copy to ensure we don't modify the original
+        df_encoded = df.copy()
         
         if columns is None:
-            columns = df_copy.select_dtypes(include=['object', 'category']).columns
+            columns = df_encoded.select_dtypes(include=['object', 'category']).columns
             
         if len(columns) == 0:
             print("No categorical columns found to encode!")
-            return df_copy
+            return df_encoded
             
         if method == 'label':
             for col in columns:
                 if col not in self.encoders:
                     self.encoders[col] = LabelEncoder()
                 # Check if column exists and has categorical data
-                if col in df_copy.columns and df_copy[col].dtype in ['object', 'category']:
+                if col in df_encoded.columns and df_encoded[col].dtype in ['object', 'category']:
                     try:
-                        df_copy[col] = self.encoders[col].fit_transform(df_copy[col].astype(str))
+                        # Store original values for mapping
+                        original_values = df_encoded[col].unique()
+                        # Fit and transform the data
+                        df_encoded[col] = self.encoders[col].fit_transform(df_encoded[col].astype(str))
+                        # Store the mapping for reference
+                        self.encoders[f"{col}_mapping"] = dict(zip(original_values, 
+                                                                 self.encoders[col].transform(original_values.astype(str))))
                     except Exception as e:
                         print(f"Error encoding column {col}: {str(e)}")
                     
         elif method == 'onehot':
             for col in columns:
                 if col not in self.encoders:
-                    # Updated OneHotEncoder initialization
                     self.encoders[col] = OneHotEncoder(sparse_output=False)
-                # Check if column exists and has categorical data
-                if col in df_copy.columns and df_copy[col].dtype in ['object', 'category']:
+                if col in df_encoded.columns and df_encoded[col].dtype in ['object', 'category']:
                     try:
-                        # Reshape data for OneHotEncoder
-                        data_reshaped = df_copy[[col]]
+                        # Store original values
+                        original_values = df_encoded[col].unique()
+                        # Reshape and encode
+                        data_reshaped = df_encoded[[col]]
                         encoded_data = self.encoders[col].fit_transform(data_reshaped)
                         
-                        # Get feature names from encoder
-                        encoded_cols = [f"{col}_{cat}" for cat in 
-                                      self.encoders[col].categories_[0]]
+                        # Get feature names
+                        encoded_cols = [f"{col}_{cat}" for cat in self.encoders[col].categories_[0]]
                         
                         # Add encoded columns
                         for i, new_col in enumerate(encoded_cols):
-                            df_copy[new_col] = encoded_data[:, i]
+                            df_encoded[new_col] = encoded_data[:, i]
+                        
+                        # Store mapping
+                        categories = self.encoders[col].categories_[0]
+                        encoded_matrix = np.eye(len(categories))
+                        mapping = {cat: encoded_matrix[i].tolist() for i, cat in enumerate(categories)}
+                        self.encoders[f"{col}_mapping"] = mapping
                         
                         # Drop original column
-                        df_copy = df_copy.drop(columns=[col])
+                        df_encoded = df_encoded.drop(columns=[col])
                         
                     except Exception as e:
                         print(f"Error encoding column {col}: {str(e)}")
@@ -149,7 +157,7 @@ class DataPreprocessor:
             'columns': list(columns)
         })
         
-        return df_copy
+        return df
     
     def remove_outliers(self,
                        df: pd.DataFrame,
@@ -196,75 +204,3 @@ class DataPreprocessor:
             'total_operations': len(self.preprocessing_history),
             'operations': self.preprocessing_history
         }
-
-
-def test_car_dataset_encoding():
-    """Test categorical encoding specifically for the car price dataset"""
-    
-    # Read the CSV file
-    try:
-        df = pd.read_csv('car_price_dataset.csv')
-        print("Original Dataset Info:")
-        print("\nShape:", df.shape)
-        print("\nData Types:")
-        print(df.dtypes)
-        
-        # Show sample of original categorical columns
-        categorical_cols = ['Brand', 'Model', 'Fuel_Type', 'Transmission']
-        print("\nSample of original categorical columns:")
-        print(df[categorical_cols].head())
-        
-        # Initialize preprocessor
-        preprocessor = DataPreprocessor()
-        
-        # Apply label encoding
-        df_encoded = preprocessor.encode_categorical(
-            df, 
-            method='label',
-            columns=categorical_cols
-        )
-        
-        print("\n" + "="*50)
-        print("After Label Encoding:")
-        print("\nShape:", df_encoded.shape)
-        print("\nData Types:")
-        print(df_encoded.dtypes)
-        
-        # Show sample of encoded columns
-        print("\nSample of encoded categorical columns:")
-        print(df_encoded[categorical_cols].head())
-        
-        # Show encoding mappings
-        print("\nEncoding Mappings:")
-        for col in categorical_cols:
-            if col in preprocessor.encoders:
-                print(f"\n{col} mapping:")
-                for i, label in enumerate(preprocessor.encoders[col].classes_):
-                    print(f"{label}: {i}")
-        
-        # Verify changes
-        print("\nVerification:")
-        for col in categorical_cols:
-            original_unique = len(df[col].unique())
-            encoded_unique = len(df_encoded[col].unique())
-            print(f"{col}: {original_unique} unique values → {encoded_unique} encoded values")
-            
-        return df_encoded
-        
-    except Exception as e:
-        print(f"Error processing file: {str(e)}")
-        return None
-
-if __name__ == "__main__":
-    encoded_df = test_car_dataset_encoding()
-    
-    
-    if encoded_df is not None:
-        # Save the encoded dataset
-        try:
-            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f'processed_car_price_dataset_{timestamp}.csv'
-            encoded_df.to_csv(output_filename, index=False)
-            print(f"\nSaved encoded dataset to: {output_filename}")
-        except Exception as e:
-            print(f"Error saving file: {str(e)}")

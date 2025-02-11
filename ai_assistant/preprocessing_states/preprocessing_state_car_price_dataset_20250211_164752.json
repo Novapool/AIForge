@@ -1,0 +1,24 @@
+{
+  "dataset_name": "car_price_dataset.csv",
+  "file_id": "car_price_dataset_20250211_164752",
+  "created_at": "2025-02-11T16:47:52.722675",
+  "last_modified": "2025-02-11T16:47:52.722675",
+  "status": "completed",
+  "operations": [
+    {
+      "operation": "encoding",
+      "method": "onehot",
+      "columns": [
+        "Brand",
+        "Model",
+        "Fuel_Type",
+        "Transmission"
+      ],
+      "timestamp": "2025-02-11T16:47:52.722675"
+    }
+  ],
+  "completion_info": {
+    "timestamp": "2025-02-11T16:47:55.269513",
+    "output_file": null
+  }
+}
