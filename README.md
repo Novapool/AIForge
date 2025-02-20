@@ -20,6 +20,40 @@ AIForge is a Streamlit-based web application designed to simplify the AI model d
     - Missing value detection
     - Memory usage metrics
 
+- **Data Preprocessing**
+  - State management for preprocessing operations
+  - Categorical variable encoding (Label, One-Hot)
+  - Data normalization (Standard, MinMax, Robust)
+  - Missing value handling with multiple strategies
+  - Outlier detection and removal
+  - Transformation rule persistence
+  - Batch processing support
+  - Preprocessing state tracking and history
+
+### Model Development
+- **Tabular Data Support**
+  - Neural network architecture for tabular data
+  - Support for multiple problem types:
+    - Binary classification
+    - Multiclass classification
+    - Regression
+  - Configurable architecture
+    - Customizable hidden layers
+    - Dropout regularization
+    - Batch normalization
+  - Model state management
+  - Automated data preparation and splitting
+
+- **Training Infrastructure**
+  - Automated train/validation/test splitting
+  - Early stopping support
+  - Model checkpointing
+  - Training metrics tracking
+    - Loss monitoring
+    - Accuracy metrics
+  - Device-agnostic training (CPU/GPU)
+  - Batch processing capabilities
+
 - **Batch Processing**
   - Multi-file handling
   - Aggregate statistics for batch uploads
@@ -31,13 +65,19 @@ AIForge is a Streamlit-based web application designed to simplify the AI model d
 - Dataset structure visualization
 - Memory usage tracking
 - Performance metrics display
+- Training progress monitoring
 
 ## 🛠 Technical Stack
 
 - **Frontend:** Streamlit
-- **Data Processing:** Pandas, NumPy
+- **Data Processing:** 
+  - Pandas (Data manipulation)
+  - NumPy (Numerical operations)
+- **Machine Learning:** 
+  - PyTorch (Neural Networks)
+  - scikit-learn (Data Splitting)
 - **Visualization:** Plotly
-- **ML Framework:** PyTorch
+- **State Management:** JSON
 - **Development Tools:** 
   - Black (formatting)
   - Flake8 (linting)
@@ -84,37 +124,47 @@ ai_assistant/
 │   └── AIForge_Logo.png
 ├── configs/
 │   └── config.yaml
+├── models/
+│   └── checkpoints/      # Model checkpoint storage
 ├── notebooks/
 │   └── examples.ipynb
+├── preprocessing_states/ # Preprocessing state storage
 ├── src/
-│   ├── app.py              # Main Streamlit application
-│   ├── data/               # Data handling modules
-│   ├── models/             # ML model implementations
-│   └── utils/              # Utility functions
-│       ├── directory_handler.py  # File/directory management
-│       └── visualization.py      # Data visualization tools
-└── tests/                  # Test suite
+│   ├── app.py           # Main Streamlit application
+│   ├── data/            # Data handling modules
+│   │   ├── data_loader.py
+│   │   ├── data_preprocessor.py
+│   │   └── preprocessing_manager.py
+│   ├── models/          # ML model implementations
+│   │   ├── base_model.py
+│   │   ├── model_manager.py
+│   │   ├── tabular_models.py
+│   │   └── trainer.py
+│   └── utils/           # Utility functions
+│       ├── directory_handler.py
+│       └── visualization.py
+└── tests/               # Test suite
 ```
 
 ## 🔜 Upcoming Features
 
-- Data Preprocessing
-  - Missing value handling
-  - Feature scaling
-  - Encoding categorical variables
-  - Feature selection
+- **Advanced Model Development**
+  - Additional model architectures
+  - Hyperparameter optimization
+  - Cross-validation support
+  - Model versioning and comparison
 
-- Model Development
-  - Model architecture selection
-  - Hyperparameter configuration
-  - Training pipeline setup
-  - Model validation
+- **Enhanced Training Visualization**
+  - Interactive training progress visualization
+  - Advanced metric plotting
+  - Model comparison tools
+  - Performance analysis dashboard
 
-- Training Visualization
-  - Real-time training metrics
-  - Performance visualization
-  - Model checkpointing
-  - Early stopping
+- **Extended Data Processing**
+  - Advanced feature engineering
+  - Automated feature selection
+  - Custom preprocessing pipelines
+  - Data augmentation strategies
 
 ## 🤝 Contributing
 
