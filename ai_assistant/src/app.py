@@ -71,7 +71,7 @@ def render_data_management():
     if 'directory_path' not in st.session_state:
         st.session_state['directory_path'] = ''
     
-    tabs = st.tabs(["Upload & Preview", "Analysis & Visualization", "Preprocessing", "TensorBoard"])
+    tabs = st.tabs(["Upload & Preview", "Analysis & Visualization", "Preprocessing"])
     
     with tabs[0]:  # Upload & Preview
         st.write("### Data Upload")
@@ -193,8 +193,6 @@ def render_data_management():
     with tabs[2]:  # Preprocessing
         render_preprocessing_tab()
         
-    with tabs[3]:  # TensorBoard
-        st.write("TensorBoard integration coming soon!")
 
 def render_model_development():
     st.header("Model Development")
@@ -212,7 +210,7 @@ def render_model_development():
     selected_dataset = st.selectbox("Select Dataset", dataset_names)
     df = st.session_state['current_dfs'][selected_dataset].copy()
     
-    tabs = st.tabs(["Model Configuration", "Training Configuration", "Training Progress"])
+    tabs = st.tabs(["Model Configuration", "Framework Selection", "Training Configuration"])
     
     with tabs[0]:
         st.subheader("Model Configuration")
@@ -270,7 +268,58 @@ def render_model_development():
             except Exception as e:
                 st.error(f"Error initializing model: {str(e)}")
     
-    with tabs[1]:
+    with tabs[1]:  # Framework Selection
+        st.subheader("Framework Selection")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_framework = st.selectbox(
+                "Select Framework",
+                ["PyTorch (Current)", "TensorFlow", "Scikit-learn", "Custom Framework"],
+                help="Choose the deep learning framework for model implementation"
+            )
+            
+            framework_version = st.text_input(
+                "Framework Version",
+                value="2.0.1" if selected_framework == "PyTorch (Current)" else "",
+                disabled=True
+            )
+        
+        with col2:
+            st.write("### Framework Capabilities")
+            capabilities = {
+                "PyTorch (Current)": [
+                    "Dynamic Computational Graphs",
+                    "GPU Acceleration",
+                    "Automatic Differentiation",
+                    "Distributed Training"
+                ],
+                "TensorFlow": [
+                    "Static Graphs (Coming Soon)",
+                    "TPU Support (Coming Soon)",
+                    "TF.js Export (Coming Soon)",
+                    "TensorBoard Integration"
+                ],
+                "Scikit-learn": [
+                    "Traditional ML Algorithms",
+                    "Pipeline Support",
+                    "Cross-validation",
+                    "Model Selection"
+                ],
+                "Custom Framework": [
+                    "Custom Implementation",
+                    "Flexible Architecture",
+                    "Framework Interoperability",
+                    "Custom Optimizations"
+                ]
+            }
+            
+            for capability in capabilities.get(selected_framework, []):
+                st.markdown(f"- {capability}")
+        
+        st.info("Framework switching functionality coming soon! Currently using PyTorch.")
+    
+    with tabs[2]:  # Training Configuration
         st.subheader("Training Configuration")
         
         if 'prepared_data' not in st.session_state:
@@ -306,9 +355,13 @@ def render_model_development():
             except Exception as e:
                 st.error(f"Error during training: {str(e)}")
     
-    with tabs[2]:
-        st.subheader("Training Progress")
-        
+
+def render_training():
+    st.header("Training")
+    
+    tabs = st.tabs(["Training Progress", "TensorBoard", "Training History"])
+    
+    with tabs[0]:  # Training Progress
         if 'training_metrics' in st.session_state:
             metrics = st.session_state['training_metrics']
             
@@ -335,16 +388,17 @@ def render_model_development():
                 st.plotly_chart(fig_acc)
         else:
             st.info("No training data available. Please train the model first.")
-
-def render_training():
-    st.header("Training")
-    st.info("Training features coming soon!")
     
-    # Placeholder for training progress
-    with st.expander("Training Progress"):
-        progress_bar = st.progress(0)
-        st.metric("Training Loss", "0.325", "-0.015")
-        st.metric("Validation Accuracy", "89.5%", "+1.2%")
+    with tabs[1]:  # TensorBoard
+        st.write("### TensorBoard Integration")
+        if st.button("Launch TensorBoard"):
+            st.info("TensorBoard will be launched in a new window")
+            # Placeholder for TensorBoard launch functionality
+            st.code("tensorboard --logdir=logs", language="bash")
+    
+    with tabs[2]:  # Training History
+        st.write("### Training History")
+        st.info("Training history and model versioning coming soon!")
 
 def render_preprocessing_tab():
     """Render the preprocessing tab in the Streamlit interface"""
@@ -698,10 +752,45 @@ def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
         raise e
 
 def render_results():
-
-
     st.header("Results")
-    st.info("Results visualization coming soon!")
+    
+    tabs = st.tabs(["Model Evaluation", "Model Interpretability", "Deployment"])
+    
+    with tabs[0]:  # Model Evaluation
+        st.write("### Model Evaluation")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("#### Performance Metrics")
+            st.info("Confusion Matrix, ROC Curves, and other metrics coming soon!")
+            
+        with col2:
+            st.write("#### Test Set Results")
+            st.info("Test set evaluation and metrics coming soon!")
+    
+    with tabs[1]:  # Model Interpretability
+        st.write("### Model Interpretability")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("#### Feature Importance")
+            st.info("Feature importance visualization coming soon!")
+            
+        with col2:
+            st.write("#### SHAP Values")
+            st.info("SHAP value analysis coming soon!")
+    
+    with tabs[2]:  # Deployment
+        st.write("### Model Deployment")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("#### Export Options")
+            st.info("Model export and serialization options coming soon!")
+            
+        with col2:
+            st.write("#### Deployment Status")
+            st.info("Deployment tracking and management coming soon!")
 
 if __name__ == "__main__":
     main()
