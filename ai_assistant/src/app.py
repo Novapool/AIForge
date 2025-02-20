@@ -6,6 +6,7 @@ import os
 import numpy as np
 import warnings
 import json
+import plotly.express as px
 
 from utils.visualization import DataVisualizer
 from utils.directory_handler import DirectoryHandler
@@ -13,6 +14,7 @@ from data.data_preprocessor import DataPreprocessor
 from data.preprocessing_manager import PreprocessingManager
 from models.model_manager import ModelManager, ProblemType
 from models.tabular_models import TabularModel
+from models.trainer import ModelTrainer
 
 
 warnings.filterwarnings('ignore', message='Examining the path of torch.classes.*')
@@ -197,7 +199,6 @@ def render_data_management():
 def render_model_development():
     st.header("Model Development")
     
-    # Check if data is loaded
     if 'current_dfs' not in st.session_state:
         st.warning("Please load data first in the Data Management tab")
         return
@@ -205,33 +206,135 @@ def render_model_development():
     # Initialize model manager if not exists
     if 'model_manager' not in st.session_state:
         st.session_state['model_manager'] = ModelManager()
+        st.session_state['model_trainer'] = ModelTrainer()
     
-    # Select dataset if multiple are loaded
     dataset_names = list(st.session_state['current_dfs'].keys())
     selected_dataset = st.selectbox("Select Dataset", dataset_names)
-    
-    # Get DataFrame
     df = st.session_state['current_dfs'][selected_dataset].copy()
     
-    # Create tabs for model configuration and training
     tabs = st.tabs(["Model Configuration", "Training Configuration", "Training Progress"])
     
     with tabs[0]:
         st.subheader("Model Configuration")
         
-        # Target column selection
-        target_column = st.selectbox(
-            "Select Target Column",
-            df.columns.tolist(),
-            help="Select the column you want to predict"
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            target_column = st.selectbox(
+                "Select Target Column",
+                df.columns.tolist(),
+                help="Select the column you want to predict"
+            )
+            
+            problem_type = st.selectbox(
+                "Select Problem Type",
+                ["binary_classification", "multiclass_classification", "regression"],
+                help="Select the type of machine learning problem"
+            )
         
-        # Problem type selection
-        problem_type = st.selectbox(
-            "Select Problem Type",
-            ["binary_classification", "multiclass_classification", "regression"],
-            help="Select the type of machine learning problem"
-        )
+        with col2:
+            # Model architecture configuration
+            num_layers = st.number_input("Number of Hidden Layers", min_value=1, max_value=5, value=2)
+            hidden_dims = []
+            for i in range(num_layers):
+                dim = st.number_input(f"Hidden Layer {i+1} Dimension", 
+                                    min_value=8, max_value=512, value=64 // (2**i))
+                hidden_dims.append(dim)
+            
+            dropout_rate = st.slider("Dropout Rate", 0.0, 0.5, 0.2, 0.1)
+        
+        if st.button("Initialize Model"):
+            try:
+                with st.spinner("Preparing data and initializing model..."):
+                    # Prepare data
+                    data = st.session_state['model_manager'].prepare_data(
+                        df, target_column, problem_type
+                    )
+                    
+                    # Create model
+                    st.session_state['model_manager'].create_model(
+                        hidden_dims=hidden_dims,
+                        dropout_rate=dropout_rate
+                    )
+                    
+                    # Store in session state
+                    st.session_state['prepared_data'] = data
+                    st.success("Model initialized successfully!")
+                    
+                    # Display model summary
+                    st.write("### Model Summary")
+                    st.write(f"Input Features: {st.session_state['model_manager'].input_dim}")
+                    st.write(f"Output Dimension: {st.session_state['model_manager'].output_dim}")
+                    st.write(f"Hidden Layers: {hidden_dims}")
+                    st.write(f"Problem Type: {problem_type}")
+            
+            except Exception as e:
+                st.error(f"Error initializing model: {str(e)}")
+    
+    with tabs[1]:
+        st.subheader("Training Configuration")
+        
+        if 'prepared_data' not in st.session_state:
+            st.warning("Please initialize the model first")
+            return
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            num_epochs = st.number_input("Number of Epochs", min_value=1, max_value=1000, value=100)
+            batch_size = st.number_input("Batch Size", min_value=1, max_value=512, value=32)
+        
+        with col2:
+            learning_rate = st.number_input("Learning Rate", min_value=0.0001, max_value=0.1, value=0.001, format="%f")
+            patience = st.number_input("Early Stopping Patience", min_value=1, max_value=50, value=10)
+        
+        if st.button("Start Training"):
+            try:
+                with st.spinner("Training model..."):
+                    metrics = st.session_state['model_trainer'].train(
+                        model=st.session_state['model_manager'].model,
+                        dataloaders=st.session_state['model_manager'].create_dataloaders(
+                            st.session_state['prepared_data'], batch_size
+                        ),
+                        problem_type=st.session_state['model_manager'].problem_type,
+                        num_epochs=num_epochs,
+                        learning_rate=learning_rate,
+                        early_stopping_patience=patience
+                    )
+                    
+                    st.session_state['training_metrics'] = metrics
+                    st.success("Training completed successfully!")
+            
+            except Exception as e:
+                st.error(f"Error during training: {str(e)}")
+    
+    with tabs[2]:
+        st.subheader("Training Progress")
+        
+        if 'training_metrics' in st.session_state:
+            metrics = st.session_state['training_metrics']
+            
+            # Plot training curves
+            fig_loss = px.line(
+                {'epoch': range(len(metrics['train_loss'])),
+                 'Training Loss': metrics['train_loss'],
+                 'Validation Loss': metrics['val_loss']},
+                x='epoch',
+                y=['Training Loss', 'Validation Loss'],
+                title='Training and Validation Loss'
+            )
+            st.plotly_chart(fig_loss)
+            
+            if 'train_accuracy' in metrics and len(metrics['train_accuracy']) > 0:
+                fig_acc = px.line(
+                    {'epoch': range(len(metrics['train_accuracy'])),
+                     'Training Accuracy': metrics['train_accuracy'],
+                     'Validation Accuracy': metrics['val_accuracy']},
+                    x='epoch',
+                    y=['Training Accuracy', 'Validation Accuracy'],
+                    title='Training and Validation Accuracy'
+                )
+                st.plotly_chart(fig_acc)
+        else:
+            st.info("No training data available. Please train the model first.")
 
 def render_training():
     st.header("Training")

@@ -30,4 +30,6 @@ class TabularModel(nn.Module):
         self.model = nn.Sequential(*layers)
     
     def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            raise TypeError("Input must be a torch.Tensor")
         return self.model(x)
