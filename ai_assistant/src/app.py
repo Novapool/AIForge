@@ -11,6 +11,8 @@ from utils.visualization import DataVisualizer
 from utils.directory_handler import DirectoryHandler
 from data.data_preprocessor import DataPreprocessor
 from data.preprocessing_manager import PreprocessingManager
+from models.model_manager import ModelManager, ProblemType
+from models.tabular_models import TabularModel
 
 
 warnings.filterwarnings('ignore', message='Examining the path of torch.classes.*')
@@ -194,13 +196,42 @@ def render_data_management():
 
 def render_model_development():
     st.header("Model Development")
-    st.info("Model development features coming soon!")
     
-    # Placeholder for model configuration
-    with st.expander("Model Configuration"):
-        st.selectbox("Model Architecture", ["ResNet18", "ResNet50", "VGG16"])
-        st.number_input("Batch Size", min_value=1, value=32)
-        st.number_input("Learning Rate", min_value=0.0001, value=0.001, format="%f")
+    # Check if data is loaded
+    if 'current_dfs' not in st.session_state:
+        st.warning("Please load data first in the Data Management tab")
+        return
+    
+    # Initialize model manager if not exists
+    if 'model_manager' not in st.session_state:
+        st.session_state['model_manager'] = ModelManager()
+    
+    # Select dataset if multiple are loaded
+    dataset_names = list(st.session_state['current_dfs'].keys())
+    selected_dataset = st.selectbox("Select Dataset", dataset_names)
+    
+    # Get DataFrame
+    df = st.session_state['current_dfs'][selected_dataset].copy()
+    
+    # Create tabs for model configuration and training
+    tabs = st.tabs(["Model Configuration", "Training Configuration", "Training Progress"])
+    
+    with tabs[0]:
+        st.subheader("Model Configuration")
+        
+        # Target column selection
+        target_column = st.selectbox(
+            "Select Target Column",
+            df.columns.tolist(),
+            help="Select the column you want to predict"
+        )
+        
+        # Problem type selection
+        problem_type = st.selectbox(
+            "Select Problem Type",
+            ["binary_classification", "multiclass_classification", "regression"],
+            help="Select the type of machine learning problem"
+        )
 
 def render_training():
     st.header("Training")
