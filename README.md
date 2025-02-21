@@ -99,8 +99,20 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 3. Install dependencies:
 ```bash
+# For CPU-only installation (works on all systems):
 pip install -r requirements.txt
+
+# For GPU-accelerated installation (requires NVIDIA GPU):
+pip install -r requirements-cuda.txt
 ```
+
+The application will automatically detect if a GPU is available and use it for accelerated training. If no GPU is available, it will seamlessly fall back to CPU operation.
+
+### GPU Support
+If you have an NVIDIA GPU and want to enable GPU acceleration:
+1. Ensure you have the latest NVIDIA drivers installed
+2. Install CUDA Toolkit 12.1 or later from [NVIDIA's website](https://developer.nvidia.com/cuda-downloads)
+3. Use `requirements-cuda.txt` for installation to get PyTorch with CUDA support
 
 ## 🚀 Getting Started
 

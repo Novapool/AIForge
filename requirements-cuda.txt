@@ -1,10 +1,12 @@
-# Base requirements for AIForge
-# For NVIDIA GPU support, use: pip install -r requirements-cuda.txt
+# GPU-accelerated requirements for AIForge
+# Requires NVIDIA GPU with CUDA support
+# To install: pip install -r requirements-cuda.txt
 
-# Deep Learning Framework
-torch        # CPU version
-torchvision  # CPU version
-torchaudio   # CPU version
+# PyTorch with CUDA 12.1 support
+--find-links https://download.pytorch.org/whl/cu121
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
 
 # Web Interface
 streamlit
