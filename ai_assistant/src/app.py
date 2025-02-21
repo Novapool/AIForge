@@ -12,7 +12,7 @@ from utils.visualization import DataVisualizer
 from utils.directory_handler import DirectoryHandler
 from data.data_preprocessor import DataPreprocessor
 from data.preprocessing_manager import PreprocessingManager
-from models.model_manager import ModelManager, ProblemType
+from models.model_manager import ModelManager, ProblemType, DataPreprocessingError
 from models.tabular_models import TabularModel
 from models.trainer import ModelTrainer
 
@@ -265,6 +265,17 @@ def render_model_development():
                     st.write(f"Hidden Layers: {hidden_dims}")
                     st.write(f"Problem Type: {problem_type}")
             
+            except DataPreprocessingError as e:
+                st.error("⚠️ Data Preprocessing Required")
+                st.error(f"{e.message}")
+                if e.columns:
+                    st.write("Columns requiring preprocessing:")
+                    for col in e.columns:
+                        st.write(f"- {col}")
+                    st.info("💡 Go to Data Management → Preprocessing → Categorical Encoding to process these columns.")
+                    if st.button("Go to Preprocessing"):
+                        st.session_state['navigation'] = "Data Management"
+                        st.rerun()
             except Exception as e:
                 st.error(f"Error initializing model: {str(e)}")
     

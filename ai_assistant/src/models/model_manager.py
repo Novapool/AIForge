@@ -8,6 +8,13 @@ from enum import Enum
 from pathlib import Path
 from .tabular_models import TabularModel
 
+class DataPreprocessingError(Exception):
+    """Custom exception for data preprocessing requirements"""
+    def __init__(self, message: str, columns: List[str]):
+        self.message = message
+        self.columns = columns
+        super().__init__(self.message)
+
 class ProblemType(Enum):
     BINARY_CLASSIFICATION = "binary_classification"
     MULTICLASS_CLASSIFICATION = "multiclass_classification"
@@ -77,21 +84,35 @@ class ModelManager:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=val_size, random_state=42)
         
+        # Check for non-numeric data types in features
+        non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns.tolist()
+        if non_numeric_cols:
+            raise DataPreprocessingError(
+                "Non-numeric data found in features. Please preprocess these columns using appropriate encoding methods.",
+                non_numeric_cols
+            )
+
         # Convert to tensors
-        train_data = {
-            'features': torch.FloatTensor(X_train.values),
-            'targets': torch.FloatTensor(y_train.values)
-        }
-        
-        val_data = {
-            'features': torch.FloatTensor(X_val.values),
-            'targets': torch.FloatTensor(y_val.values)
-        }
-        
-        test_data = {
-            'features': torch.FloatTensor(X_test.values),
-            'targets': torch.FloatTensor(y_test.values)
-        }
+        try:
+            train_data = {
+                'features': torch.FloatTensor(X_train.values),
+                'targets': torch.FloatTensor(y_train.values)
+            }
+            
+            val_data = {
+                'features': torch.FloatTensor(X_val.values),
+                'targets': torch.FloatTensor(y_val.values)
+            }
+            
+            test_data = {
+                'features': torch.FloatTensor(X_test.values),
+                'targets': torch.FloatTensor(y_test.values)
+            }
+        except (ValueError, TypeError) as e:
+            raise DataPreprocessingError(
+                "Failed to convert data to tensors. Please ensure all data is properly preprocessed and contains only numeric values.",
+                non_numeric_cols if non_numeric_cols else []
+            )
         
         return {
             'train': train_data,
