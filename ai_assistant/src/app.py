@@ -188,7 +188,197 @@ def render_data_management():
                 else:
                     st.image(uploaded_file, caption=uploaded_file.name)
     with tabs[1]:  # Analysis & Visualization
-        st.write("Analysis & Visualization features coming soon!")
+        if 'current_dfs' not in st.session_state:
+            st.warning("Please load data first in the Upload & Preview tab")
+            return
+            
+        dataset_names = list(st.session_state['current_dfs'].keys())
+        selected_dataset = st.selectbox("Select Dataset for Analysis", dataset_names)
+        df = st.session_state['current_dfs'][selected_dataset].copy()
+        
+        analysis_tabs = st.tabs([
+            "Data Overview",
+            "Distribution Analysis",
+            "Correlation Analysis",
+            "Missing Data Analysis",
+            "Feature Analysis"
+        ])
+        
+        with analysis_tabs[0]:  # Data Overview
+            st.write("### Data Overview")
+            
+            # Generate and display summary statistics
+            summary_stats = DataVisualizer.generate_summary_stats(df)
+            
+            # Basic metrics in columns
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Rows", summary_stats["total_rows"])
+                st.metric("Numeric Columns", summary_stats["numeric_columns"])
+            with col2:
+                st.metric("Total Columns", summary_stats["total_columns"])
+                st.metric("Categorical Columns", summary_stats["categorical_columns"])
+            with col3:
+                st.metric("Missing Values", summary_stats["missing_values"])
+                st.metric("Memory Usage (MB)", f"{summary_stats['memory_usage']:.2f}")
+            
+            # Detailed statistics
+            st.write("### Detailed Statistics")
+            
+            # Memory usage by column
+            memory_usage_df = pd.DataFrame.from_dict(
+                summary_stats["memory_usage_by_column"],
+                orient='index',
+                columns=['Memory (bytes)']
+            )
+            memory_usage_df['Memory (MB)'] = memory_usage_df['Memory (bytes)'] / (1024**2)
+            
+            fig_memory = px.bar(
+                memory_usage_df,
+                y='Memory (MB)',
+                title="Memory Usage by Column"
+            )
+            st.plotly_chart(fig_memory, use_container_width=True)
+            
+            # Data types distribution
+            dtypes_dist = pd.Series(summary_stats["dtypes"]).value_counts()
+            fig_dtypes = px.pie(
+                values=dtypes_dist.values,
+                names=dtypes_dist.index,
+                title="Data Types Distribution"
+            )
+            st.plotly_chart(fig_dtypes, use_container_width=True)
+        
+        with analysis_tabs[1]:  # Distribution Analysis
+            st.write("### Distribution Analysis")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                # Column selection
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+                
+                data_type = st.radio("Select Data Type", ["Numeric", "Categorical"])
+                if data_type == "Numeric":
+                    selected_col = st.selectbox("Select Column", numeric_cols)
+                    plot_type = st.selectbox(
+                        "Select Plot Type",
+                        ["histogram", "box", "violin"]
+                    )
+                    if plot_type == "histogram":
+                        kde = st.checkbox("Show KDE", value=True)
+                    else:
+                        kde = False
+                else:
+                    selected_col = st.selectbox("Select Column", categorical_cols)
+                    plot_type = st.selectbox("Select Plot Type", ["bar", "pie"])
+            
+            with col2:
+                if data_type == "Numeric":
+                    fig = DataVisualizer.generate_distribution_plot(
+                        df, selected_col, plot_type, kde
+                    )
+                else:
+                    fig = DataVisualizer.generate_categorical_plot(
+                        df, selected_col, plot_type
+                    )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with analysis_tabs[2]:  # Correlation Analysis
+            st.write("### Correlation Analysis")
+            
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if len(numeric_cols) < 2:
+                st.warning("Need at least 2 numeric columns for correlation analysis")
+            else:
+                col1, col2 = st.columns(2)
+                with col1:
+                    corr_method = st.selectbox(
+                        "Correlation Method",
+                        ["pearson", "spearman", "kendall"]
+                    )
+                    selected_cols = st.multiselect(
+                        "Select Columns",
+                        numeric_cols,
+                        default=numeric_cols[:5] if len(numeric_cols) > 5 else numeric_cols
+                    )
+                
+                if len(selected_cols) >= 2:
+                    # Correlation matrix
+                    fig_corr = DataVisualizer.generate_correlation_matrix(
+                        df, selected_cols, corr_method
+                    )
+                    st.plotly_chart(fig_corr, use_container_width=True)
+                    
+                    # Scatter matrix for selected columns
+                    if st.checkbox("Show Scatter Matrix"):
+                        n_samples = st.number_input(
+                            "Number of samples to plot (0 for all)",
+                            min_value=0,
+                            max_value=len(df),
+                            value=min(1000, len(df))
+                        )
+                        fig_scatter = DataVisualizer.generate_scatter_matrix(
+                            df,
+                            selected_cols,
+                            n_samples if n_samples > 0 else None
+                        )
+                        st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        with analysis_tabs[3]:  # Missing Data Analysis
+            st.write("### Missing Data Analysis")
+            
+            # Missing values chart
+            fig_missing = DataVisualizer.generate_missing_values_chart(df)
+            st.plotly_chart(fig_missing, use_container_width=True)
+            
+            # Missing values patterns
+            missing_cols = df.columns[df.isnull().any()].tolist()
+            if missing_cols:
+                st.write("#### Missing Value Patterns")
+                missing_pattern = df[missing_cols].isnull().astype(int)
+                pattern_counts = missing_pattern.value_counts()
+                
+                st.write(f"Found {len(pattern_counts)} distinct missing value patterns:")
+                for pattern, count in pattern_counts.items():
+                    pattern_str = ", ".join([col for col, is_missing in zip(missing_cols, pattern) if is_missing])
+                    if not pattern_str:
+                        pattern_str = "No missing values"
+                    st.write(f"- Pattern (Count: {count}): {pattern_str}")
+        
+        with analysis_tabs[4]:  # Feature Analysis
+            st.write("### Feature Analysis")
+            
+            # Outlier detection
+            st.write("#### Outlier Detection")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                selected_col = st.selectbox("Select Column for Outlier Analysis", numeric_cols)
+                outlier_method = st.selectbox("Detection Method", ["zscore", "iqr"])
+                threshold = st.slider(
+                    "Detection Threshold",
+                    min_value=1.0,
+                    max_value=5.0,
+                    value=3.0,
+                    step=0.1
+                )
+            
+            # Generate and display outlier plot
+            fig_outliers = DataVisualizer.generate_outlier_plot(
+                df, selected_col, outlier_method, threshold
+            )
+            st.plotly_chart(fig_outliers, use_container_width=True)
+            
+            # Basic statistics for the selected column
+            if selected_col in summary_stats["numeric_stats"]:
+                st.write("#### Basic Statistics")
+                stats_df = pd.DataFrame(
+                    summary_stats["numeric_stats"][selected_col],
+                    index=['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max']
+                ).T
+                st.dataframe(stats_df)
         
     with tabs[2]:  # Preprocessing
         render_preprocessing_tab()
