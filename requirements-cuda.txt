@@ -21,6 +21,7 @@ openpyxl  # for Excel file support
 
 # Visualization
 matplotlib  # for additional plotting capabilities
+seaborn    # for statistical data visualization
 tensorboard
 
 # Development Tools
