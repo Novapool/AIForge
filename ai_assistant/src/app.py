@@ -10,6 +10,7 @@ import plotly.express as px
 
 from utils.visualization import DataVisualizer
 from utils.directory_handler import DirectoryHandler
+from utils.model_evaluator import ModelEvaluator
 from data.data_preprocessor import DataPreprocessor
 from data.preprocessing_manager import PreprocessingManager
 from models.model_manager import ModelManager, ProblemType, DataPreprocessingError
@@ -955,40 +956,183 @@ def save_processed_data(df: pd.DataFrame, original_filename: str) -> None:
 def render_results():
     st.header("Results")
     
-    tabs = st.tabs(["Model Evaluation", "Model Interpretability", "Deployment"])
+    # Check if model and evaluation data are available
+    if ('model_manager' not in st.session_state or 
+        st.session_state['model_manager'].model is None or
+        'prepared_data' not in st.session_state):
+        st.warning("No trained model available. Please train a model first.")
+        return
+    
+    tabs = st.tabs(["Model Evaluation", "Model Interpretability", "Model Testing", "Deployment"])
     
     with tabs[0]:  # Model Evaluation
         st.write("### Model Evaluation")
-        col1, col2 = st.columns(2)
         
-        with col1:
-            st.write("#### Performance Metrics")
-            st.info("Confusion Matrix, ROC Curves, and other metrics coming soon!")
+        # Get problem type
+        problem_type = st.session_state['model_manager'].problem_type
+        
+        # Create dataloaders if not already in session state
+        if 'evaluation_results' not in st.session_state:
+            with st.spinner("Evaluating model..."):
+                # Create test dataloader
+                test_loader = st.session_state['model_manager'].create_dataloaders(
+                    st.session_state['prepared_data'], 
+                    batch_size=32
+                )['test']
+                
+                # Evaluate model
+                evaluation_results = ModelEvaluator.evaluate_model(
+                    st.session_state['model_manager'].model,
+                    test_loader,
+                    problem_type,
+                    st.session_state['model_manager'].device
+                )
+                
+                st.session_state['evaluation_results'] = evaluation_results
+        
+        # Display evaluation metrics based on problem type
+        if problem_type in [ProblemType.BINARY_CLASSIFICATION, ProblemType.MULTICLASS_CLASSIFICATION]:
+            # Classification metrics
+            st.write("#### Classification Metrics")
             
-        with col2:
-            st.write("#### Test Set Results")
-            st.info("Test set evaluation and metrics coming soon!")
+            # Display confusion matrix
+            conf_matrix = np.array(st.session_state['evaluation_results']['confusion_matrix'])
+            fig_conf = DataVisualizer.generate_confusion_matrix(conf_matrix)
+            st.plotly_chart(fig_conf, use_container_width=True)
+            
+            # Display classification report
+            report = st.session_state['evaluation_results']['classification_report']
+            report_df = pd.DataFrame(report).transpose()
+            st.write("Classification Report:")
+            st.dataframe(report_df.style.format("{:.3f}"))
+            
+            # For binary classification, show ROC and PR curves
+            if problem_type == ProblemType.BINARY_CLASSIFICATION and 'roc' in st.session_state['evaluation_results']:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # ROC curve
+                    roc_data = st.session_state['evaluation_results']['roc']
+                    fig_roc = DataVisualizer.generate_roc_curve(
+                        np.array(roc_data['fpr']),
+                        np.array(roc_data['tpr']),
+                        roc_data['auc']
+                    )
+                    st.plotly_chart(fig_roc, use_container_width=True)
+                
+                with col2:
+                    # PR curve
+                    pr_data = st.session_state['evaluation_results']['pr_curve']
+                    fig_pr = DataVisualizer.generate_pr_curve(
+                        np.array(pr_data['precision']),
+                        np.array(pr_data['recall']),
+                        pr_data['avg_precision']
+                    )
+                    st.plotly_chart(fig_pr, use_container_width=True)
+        
+        else:  # Regression metrics
+            st.write("#### Regression Metrics")
+            
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("MAE", f"{st.session_state['evaluation_results']['mae']:.4f}")
+            with col2:
+                st.metric("MSE", f"{st.session_state['evaluation_results']['mse']:.4f}")
+            with col3:
+                st.metric("RMSE", f"{st.session_state['evaluation_results']['rmse']:.4f}")
+            with col4:
+                st.metric("R²", f"{st.session_state['evaluation_results']['r2']:.4f}")
+            
+            # Display plots
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Residual plot
+                residuals = np.array(st.session_state['evaluation_results']['residuals'])
+                y_true = np.array(st.session_state['prepared_data']['test']['targets'].numpy())
+                y_pred = y_true - residuals
+                
+                fig_residual = DataVisualizer.generate_residual_plot(y_true, y_pred)
+                st.plotly_chart(fig_residual, use_container_width=True)
+            
+            with col2:
+                # Actual vs Predicted plot
+                fig_actual_pred = DataVisualizer.generate_actual_vs_predicted_plot(y_true, y_pred)
+                st.plotly_chart(fig_actual_pred, use_container_width=True)
     
     with tabs[1]:  # Model Interpretability
         st.write("### Model Interpretability")
-        col1, col2 = st.columns(2)
         
-        with col1:
-            st.write("#### Feature Importance")
-            st.info("Feature importance visualization coming soon!")
-            
-        with col2:
-            st.write("#### SHAP Values")
-            st.info("SHAP value analysis coming soon!")
+        # Feature importance visualization
+        st.write("#### Feature Importance")
+        
+        if problem_type != ProblemType.REGRESSION:
+            st.info("Feature importance visualization for classification models coming soon!")
+        else:
+            st.info("Feature importance visualization for regression models coming soon!")
+        
+        # SHAP values
+        st.write("#### SHAP Values")
+        st.info("SHAP value analysis coming soon!")
     
-    with tabs[2]:  # Deployment
+    with tabs[2]:  # Model Testing
+        st.write("### Model Testing")
+        
+        test_tabs = st.tabs(["Upload Test Data", "Manual Input", "Batch Testing"])
+        
+        with test_tabs[0]:  # Upload Test Data
+            st.write("#### Upload New Test Data")
+            uploaded_file = st.file_uploader("Upload test data", type=['csv', 'xlsx'])
+            
+            if uploaded_file:
+                try:
+                    # Load test data
+                    if uploaded_file.name.endswith('.csv'):
+                        test_df = pd.read_csv(uploaded_file)
+                    else:
+                        test_df = pd.read_excel(uploaded_file)
+                    
+                    st.success(f"Successfully loaded test data with shape: {test_df.shape}")
+                    st.dataframe(test_df.head())
+                    
+                    # Test data preprocessing button
+                    if st.button("Preprocess and Predict"):
+                        st.info("Test data preprocessing and prediction functionality coming soon!")
+                except Exception as e:
+                    st.error(f"Error loading test file: {str(e)}")
+        
+        with test_tabs[1]:  # Manual Input
+            st.write("#### Manual Input Testing")
+            
+            # Get feature names
+            if 'prepared_data' in st.session_state:
+                # This is a simplified approach - in a real implementation, we would need to 
+                # track the original feature names and their transformations
+                st.info("Manual input testing functionality coming soon!")
+            else:
+                st.warning("Model must be trained before manual testing is available")
+        
+        with test_tabs[2]:  # Batch Testing
+            st.write("#### Batch Testing")
+            st.info("Batch testing functionality coming soon!")
+    
+    with tabs[3]:  # Deployment
         st.write("### Model Deployment")
+        
         col1, col2 = st.columns(2)
         
         with col1:
             st.write("#### Export Options")
-            st.info("Model export and serialization options coming soon!")
             
+            export_format = st.selectbox(
+                "Export Format",
+                ["PyTorch Model (.pth)", "ONNX Format (.onnx)", "TorchScript (.pt)"]
+            )
+            
+            if st.button("Export Model"):
+                st.info(f"Model export in {export_format} coming soon!")
+        
         with col2:
             st.write("#### Deployment Status")
             st.info("Deployment tracking and management coming soon!")

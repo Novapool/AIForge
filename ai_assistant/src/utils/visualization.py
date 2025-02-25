@@ -10,6 +10,194 @@ class DataVisualizer:
     """Handles all data visualization functionality for data analysis and insights"""
     
     @staticmethod
+    def generate_confusion_matrix(confusion_matrix: np.ndarray, class_names: Optional[List[str]] = None) -> go.Figure:
+        """
+        Generate confusion matrix visualization
+        
+        Args:
+            confusion_matrix: Confusion matrix as numpy array
+            class_names: Optional list of class names
+        """
+        if class_names is None:
+            class_names = [f"Class {i}" for i in range(len(confusion_matrix))]
+        
+        fig = px.imshow(
+            confusion_matrix,
+            x=class_names,
+            y=class_names,
+            color_continuous_scale="Blues",
+            labels=dict(x="Predicted", y="Actual", color="Count"),
+            title="Confusion Matrix"
+        )
+        
+        # Add text annotations
+        for i in range(len(confusion_matrix)):
+            for j in range(len(confusion_matrix)):
+                fig.add_annotation(
+                    x=j, y=i,
+                    text=str(confusion_matrix[i, j]),
+                    showarrow=False,
+                    font=dict(color="white" if confusion_matrix[i, j] > confusion_matrix.max()/2 else "black")
+                )
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        return fig
+
+    @staticmethod
+    def generate_roc_curve(fpr: np.ndarray, tpr: np.ndarray, auc: float) -> go.Figure:
+        """
+        Generate ROC curve visualization
+        
+        Args:
+            fpr: False positive rates
+            tpr: True positive rates
+            auc: Area under curve value
+        """
+        fig = go.Figure()
+        
+        # Add ROC curve
+        fig.add_trace(go.Scatter(
+            x=fpr, y=tpr,
+            mode='lines',
+            name=f'ROC Curve (AUC = {auc:.3f})',
+            line=dict(color='blue', width=2)
+        ))
+        
+        # Add diagonal line (random classifier)
+        fig.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1],
+            mode='lines',
+            name='Random Classifier',
+            line=dict(color='red', width=2, dash='dash')
+        ))
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            title="ROC Curve",
+            xaxis_title="False Positive Rate",
+            yaxis_title="True Positive Rate",
+            xaxis=dict(range=[0, 1]),
+            yaxis=dict(range=[0, 1])
+        )
+        return fig
+
+    @staticmethod
+    def generate_pr_curve(precision: np.ndarray, recall: np.ndarray, avg_precision: float) -> go.Figure:
+        """
+        Generate Precision-Recall curve visualization
+        
+        Args:
+            precision: Precision values
+            recall: Recall values
+            avg_precision: Average precision value
+        """
+        fig = go.Figure()
+        
+        # Add PR curve
+        fig.add_trace(go.Scatter(
+            x=recall, y=precision,
+            mode='lines',
+            name=f'PR Curve (AP = {avg_precision:.3f})',
+            line=dict(color='green', width=2)
+        ))
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            title="Precision-Recall Curve",
+            xaxis_title="Recall",
+            yaxis_title="Precision",
+            xaxis=dict(range=[0, 1]),
+            yaxis=dict(range=[0, 1])
+        )
+        return fig
+
+    @staticmethod
+    def generate_residual_plot(y_true: np.ndarray, y_pred: np.ndarray) -> go.Figure:
+        """
+        Generate residual plot for regression evaluation
+        
+        Args:
+            y_true: True values
+            y_pred: Predicted values
+        """
+        residuals = y_true - y_pred
+        
+        fig = go.Figure()
+        
+        # Add scatter plot of residuals
+        fig.add_trace(go.Scatter(
+            x=y_pred, y=residuals,
+            mode='markers',
+            marker=dict(color='blue', size=8, opacity=0.6),
+            name='Residuals'
+        ))
+        
+        # Add horizontal line at y=0
+        fig.add_trace(go.Scatter(
+            x=[min(y_pred), max(y_pred)], y=[0, 0],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            name='Zero Line'
+        ))
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            title="Residual Plot",
+            xaxis_title="Predicted Values",
+            yaxis_title="Residuals (Actual - Predicted)"
+        )
+        return fig
+
+    @staticmethod
+    def generate_actual_vs_predicted_plot(y_true: np.ndarray, y_pred: np.ndarray) -> go.Figure:
+        """
+        Generate actual vs predicted plot for regression evaluation
+        
+        Args:
+            y_true: True values
+            y_pred: Predicted values
+        """
+        fig = go.Figure()
+        
+        # Add scatter plot
+        fig.add_trace(go.Scatter(
+            x=y_true, y=y_pred,
+            mode='markers',
+            marker=dict(color='blue', size=8, opacity=0.6),
+            name='Predictions'
+        ))
+        
+        # Add perfect prediction line
+        min_val = min(min(y_true), min(y_pred))
+        max_val = max(max(y_true), max(y_pred))
+        fig.add_trace(go.Scatter(
+            x=[min_val, max_val], y=[min_val, max_val],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            name='Perfect Prediction'
+        ))
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            title="Actual vs Predicted Values",
+            xaxis_title="Actual Values",
+            yaxis_title="Predicted Values"
+        )
+        return fig
+    
+    @staticmethod
     def generate_distribution_plot(
         df: pd.DataFrame, 
         column: str, 
