@@ -86,6 +86,9 @@ class ModelManager:
         X = df.drop(columns=[target_column])
         y = df[target_column]
         
+        # Store feature names for later use in feature importance
+        self.feature_names = X.columns.tolist()
+        
         # Set input and output dimensions
         self.input_dim = X.shape[1]
         self.problem_type = problem_type
@@ -190,6 +193,10 @@ class ModelManager:
         
         # Create the traditional model
         self.raw_model = create_traditional_model(model_type, problem_type, **kwargs)
+        
+        # Pass feature names to the model if available
+        if hasattr(self, 'feature_names'):
+            self.raw_model.feature_names = self.feature_names
         
         # Wrap the traditional model to make it compatible with PyTorch interface
         self.model = TraditionalModelWrapper(self.raw_model)
