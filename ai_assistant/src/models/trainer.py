@@ -2,10 +2,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 from pathlib import Path
 import pandas as pd
-from .model_manager import ProblemType
+import numpy as np
+from .model_manager import ProblemType, ModelType
+from .traditional_models import TraditionalModelWrapper
 
 class ModelTrainer:
     def __init__(self):
@@ -96,8 +98,27 @@ class ModelTrainer:
 
     def train(self, model, dataloaders: Dict[str, DataLoader], problem_type: ProblemType,
              num_epochs: int = 100, learning_rate: float = 0.001,
-             early_stopping_patience: int = 10) -> Dict[str, List[float]]:
-        """Train the model"""
+             early_stopping_patience: int = 10, **kwargs) -> Dict[str, List[float]]:
+        """
+        Train the model
+        
+        Args:
+            model: Model to train
+            dataloaders: Dictionary containing DataLoaders for train, val, and test
+            problem_type: Type of problem (classification or regression)
+            num_epochs: Number of epochs to train for
+            learning_rate: Learning rate for optimizer
+            early_stopping_patience: Number of epochs to wait before early stopping
+            **kwargs: Additional parameters for training
+            
+        Returns:
+            Dictionary containing training metrics
+        """
+        # Check if this is a traditional model
+        if isinstance(model, TraditionalModelWrapper):
+            return self.train_traditional_model(model, dataloaders, problem_type, **kwargs)
+        
+        # Neural network training
         checkpoint_path = self.checkpoint_dir / f"model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pth"
         
         # Initialize criterion and optimizer
@@ -135,6 +156,77 @@ class ModelTrainer:
         model.load_state_dict(torch.load(checkpoint_path))
         
         return self.metrics_history
+    
+    def train_traditional_model(self, model_wrapper: TraditionalModelWrapper, 
+                               dataloaders: Dict[str, DataLoader], 
+                               problem_type: ProblemType,
+                               **kwargs) -> Dict[str, List[float]]:
+        """
+        Train a traditional ML model
+        
+        Args:
+            model_wrapper: TraditionalModelWrapper instance
+            dataloaders: Dictionary containing DataLoaders for train, val, and test
+            problem_type: Type of problem (classification or regression)
+            **kwargs: Additional parameters for the model
+            
+        Returns:
+            Dictionary containing training metrics
+        """
+        # Extract the raw model from the wrapper
+        raw_model = model_wrapper.model
+        
+        # Convert PyTorch DataLoader to numpy arrays for training
+        X_train, y_train = self._dataloader_to_numpy(dataloaders['train'])
+        X_val, y_val = self._dataloader_to_numpy(dataloaders['val'])
+        
+        # Train the model
+        raw_model.fit(X_train, y_train)
+        
+        # Evaluate on training and validation sets
+        train_metrics = raw_model.evaluate(X_train, y_train)
+        val_metrics = raw_model.evaluate(X_val, y_val)
+        
+        # Extract metrics based on problem type
+        if problem_type == ProblemType.REGRESSION:
+            train_loss = train_metrics['mse']
+            val_loss = val_metrics['mse']
+            train_acc = None
+            val_acc = None
+        else:  # Classification
+            # For classification, use accuracy as the main metric
+            train_loss = 1.0 - train_metrics['accuracy']  # Convert accuracy to loss
+            val_loss = 1.0 - val_metrics['accuracy']
+            train_acc = train_metrics['accuracy']
+            val_acc = val_metrics['accuracy']
+        
+        # Update metrics history (just one "epoch" for traditional models)
+        self._update_metrics(train_loss, val_loss, train_acc, val_acc)
+        
+        # Save the model
+        checkpoint_path = self.checkpoint_dir / f"model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.joblib"
+        raw_model.save(str(checkpoint_path))
+        
+        return self.metrics_history
+    
+    def _dataloader_to_numpy(self, dataloader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert a PyTorch DataLoader to numpy arrays
+        
+        Args:
+            dataloader: DataLoader to convert
+            
+        Returns:
+            Tuple of (features, targets) as numpy arrays
+        """
+        features_list = []
+        targets_list = []
+        
+        for features, targets in dataloader:
+            features_list.append(features.numpy())
+            targets_list.append(targets.numpy())
+        
+        return np.vstack(features_list), np.concatenate(targets_list)
 
     def _get_criterion(self, problem_type: ProblemType) -> nn.Module:
         """Get the appropriate criterion based on problem type"""

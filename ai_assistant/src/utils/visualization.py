@@ -2,7 +2,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import seaborn as sns
 from scipy import stats
 
@@ -496,6 +496,47 @@ class DataVisualizer:
         }
         return combined_stats
 
+    @staticmethod
+    def generate_feature_importance_plot(
+        feature_importance: Dict[str, float],
+        title: str = "Feature Importance"
+    ) -> go.Figure:
+        """
+        Generate feature importance visualization
+        
+        Args:
+            feature_importance: Dictionary mapping feature names to importance values
+            title: Plot title
+            
+        Returns:
+            Plotly figure object
+        """
+        # Convert to DataFrame and sort by importance
+        importance_df = pd.DataFrame({
+            'Feature': list(feature_importance.keys()),
+            'Importance': list(feature_importance.values())
+        }).sort_values('Importance', ascending=False)
+        
+        # Create horizontal bar chart
+        fig = px.bar(
+            importance_df,
+            y='Feature',
+            x='Importance',
+            orientation='h',
+            title=title
+        )
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title=""),
+            xaxis=dict(title="Importance"),
+            height=max(400, len(feature_importance) * 25)  # Dynamic height based on number of features
+        )
+        
+        return fig
+    
     @staticmethod
     def generate_summary_stats(df: pd.DataFrame) -> Dict:
         """Generate comprehensive summary statistics for the dataset"""

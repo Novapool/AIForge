@@ -180,3 +180,10 @@ cython_debug/
 
 # CSV files
 *.csv
+
+# Model files
+*.pth
+*.onnx
+
+# JSON files
+*.json

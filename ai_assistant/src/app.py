@@ -419,17 +419,99 @@ def render_model_development():
                 ["binary_classification", "multiclass_classification", "regression"],
                 help="Select the type of machine learning problem"
             )
+            
+            model_type = st.selectbox(
+                "Select Model Type",
+                ["neural_network", "random_forest", "gradient_boosting", "xgboost", 
+                 "lightgbm", "linear", "svm", "knn", "decision_tree"],
+                help="Select the type of model to use"
+            )
         
         with col2:
-            # Model architecture configuration
-            num_layers = st.number_input("Number of Hidden Layers", min_value=1, max_value=5, value=2)
-            hidden_dims = []
-            for i in range(num_layers):
-                dim = st.number_input(f"Hidden Layer {i+1} Dimension", 
-                                    min_value=8, max_value=512, value=64 // (2**i))
-                hidden_dims.append(dim)
-            
-            dropout_rate = st.slider("Dropout Rate", 0.0, 0.5, 0.2, 0.1)
+            # Model-specific configuration
+            if model_type == "neural_network":
+                # Neural network configuration
+                st.write("#### Neural Network Configuration")
+                num_layers = st.number_input("Number of Hidden Layers", min_value=1, max_value=5, value=2)
+                hidden_dims = []
+                for i in range(num_layers):
+                    dim = st.number_input(f"Hidden Layer {i+1} Dimension", 
+                                        min_value=8, max_value=512, value=64 // (2**i))
+                    hidden_dims.append(dim)
+                
+                dropout_rate = st.slider("Dropout Rate", 0.0, 0.5, 0.2, 0.1)
+                model_params = {
+                    "hidden_dims": hidden_dims,
+                    "dropout_rate": dropout_rate
+                }
+            elif model_type in ["random_forest", "gradient_boosting", "decision_tree"]:
+                # Tree-based model configuration
+                st.write(f"#### {model_type.replace('_', ' ').title()} Configuration")
+                n_estimators = st.number_input("Number of Estimators", min_value=10, max_value=1000, value=100, step=10)
+                max_depth = st.number_input("Maximum Depth", min_value=1, max_value=100, value=10)
+                min_samples_split = st.number_input("Minimum Samples Split", min_value=2, max_value=20, value=2)
+                model_params = {
+                    "n_estimators": n_estimators,
+                    "max_depth": max_depth,
+                    "min_samples_split": min_samples_split
+                }
+            elif model_type in ["xgboost", "lightgbm"]:
+                # Gradient boosting configuration
+                st.write(f"#### {model_type.replace('_', ' ').title()} Configuration")
+                n_estimators = st.number_input("Number of Estimators", min_value=10, max_value=1000, value=100, step=10)
+                learning_rate = st.number_input("Learning Rate", min_value=0.001, max_value=1.0, value=0.1, format="%.3f")
+                max_depth = st.number_input("Maximum Depth", min_value=1, max_value=100, value=6)
+                model_params = {
+                    "n_estimators": n_estimators,
+                    "learning_rate": learning_rate,
+                    "max_depth": max_depth
+                }
+            elif model_type == "linear":
+                # Linear model configuration
+                st.write("#### Linear Model Configuration")
+                linear_model_type = st.selectbox(
+                    "Linear Model Type",
+                    ["standard", "ridge", "lasso"],
+                    help="Select the type of linear model"
+                )
+                if linear_model_type in ["ridge", "lasso"]:
+                    alpha = st.number_input("Regularization Strength (Alpha)", min_value=0.001, max_value=10.0, value=1.0, format="%.3f")
+                    model_params = {
+                        "model_subtype": linear_model_type,
+                        "alpha": alpha
+                    }
+                else:
+                    model_params = {
+                        "model_subtype": linear_model_type
+                    }
+            elif model_type == "svm":
+                # SVM configuration
+                st.write("#### SVM Configuration")
+                kernel = st.selectbox(
+                    "Kernel",
+                    ["rbf", "linear", "poly", "sigmoid"],
+                    help="Select the kernel type"
+                )
+                C = st.number_input("Regularization Parameter (C)", min_value=0.1, max_value=100.0, value=1.0, format="%.2f")
+                model_params = {
+                    "kernel": kernel,
+                    "C": C
+                }
+            elif model_type == "knn":
+                # KNN configuration
+                st.write("#### K-Nearest Neighbors Configuration")
+                n_neighbors = st.number_input("Number of Neighbors", min_value=1, max_value=100, value=5)
+                weights = st.selectbox(
+                    "Weight Function",
+                    ["uniform", "distance"],
+                    help="Select the weight function"
+                )
+                model_params = {
+                    "n_neighbors": n_neighbors,
+                    "weights": weights
+                }
+            else:
+                model_params = {}
         
         if st.button("Initialize Model"):
             try:
@@ -441,8 +523,8 @@ def render_model_development():
                     
                     # Create model
                     st.session_state['model_manager'].create_model(
-                        hidden_dims=hidden_dims,
-                        dropout_rate=dropout_rate
+                        model_type=model_type,
+                        **model_params
                     )
                     
                     # Store in session state
@@ -451,10 +533,16 @@ def render_model_development():
                     
                     # Display model summary
                     st.write("### Model Summary")
-                    st.write(f"Input Features: {st.session_state['model_manager'].input_dim}")
-                    st.write(f"Output Dimension: {st.session_state['model_manager'].output_dim}")
-                    st.write(f"Hidden Layers: {hidden_dims}")
+                    model_summary = st.session_state['model_manager'].get_model_summary()
+                    st.write(f"Model Type: {model_type.replace('_', ' ').title()}")
                     st.write(f"Problem Type: {problem_type}")
+                    st.write(f"Input Features: {model_summary['input_dim']}")
+                    st.write(f"Output Dimension: {model_summary['output_dim']}")
+                    
+                    # Display model-specific details
+                    if model_type == "neural_network":
+                        st.write(f"Hidden Layers: {model_params['hidden_dims']}")
+                        st.write(f"Dropout Rate: {model_params['dropout_rate']}")
             
             except DataPreprocessingError as e:
                 st.error("⚠️ Data Preprocessing Required")
@@ -835,7 +923,8 @@ def render_preprocessing_tab():
                 
                 # Save processed DataFrame
                 timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                output_path = f"ai_assistant/processed_data/processed_{selected_dataset}_{timestamp}.csv"
+                processed_filename = f"processed_{selected_dataset}_{timestamp}"
+                output_path = f"ai_assistant/processed_data/{processed_filename}.csv"
                 
                 # Ensure directory exists
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -843,7 +932,16 @@ def render_preprocessing_tab():
                 # Save the processed DataFrame
                 df.to_csv(output_path, index=False)
                 
+                # Add to current_dfs session state
+                st.session_state['current_dfs'][processed_filename] = df
+                
+                # Option to use processed data for modeling
+                use_for_modeling = st.checkbox("Use processed data for modeling", value=True)
+                if use_for_modeling:
+                    st.session_state['selected_dataset'] = processed_filename
+                
                 st.success(f"Preprocessing applied and data saved to: {output_path}")
+                st.info(f"The processed dataset '{processed_filename}' has been added to your available datasets.")
                 
             except Exception as e:
                 st.error(f"Error applying preprocessing: {str(e)}")
@@ -1067,10 +1165,30 @@ def render_results():
         # Feature importance visualization
         st.write("#### Feature Importance")
         
-        if problem_type != ProblemType.REGRESSION:
-            st.info("Feature importance visualization for classification models coming soon!")
+        # Get feature importance if available
+        feature_importance = st.session_state['model_manager'].get_feature_importance()
+        
+        if feature_importance:
+            # Display feature importance plot
+            fig = DataVisualizer.generate_feature_importance_plot(
+                feature_importance,
+                title=f"Feature Importance for {st.session_state['model_manager'].model_type.value.replace('_', ' ').title()} Model"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display feature importance as a table
+            importance_df = pd.DataFrame({
+                'Feature': list(feature_importance.keys()),
+                'Importance': list(feature_importance.values())
+            }).sort_values('Importance', ascending=False)
+            
+            st.write("Feature Importance Table:")
+            st.dataframe(importance_df, use_container_width=True)
         else:
-            st.info("Feature importance visualization for regression models coming soon!")
+            if st.session_state['model_manager'].model_type.value == "neural_network":
+                st.info("Feature importance is not directly available for neural network models. Consider using SHAP values for model interpretation.")
+            else:
+                st.info("Feature importance not available for this model type.")
         
         # SHAP values
         st.write("#### SHAP Values")

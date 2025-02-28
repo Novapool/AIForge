@@ -5,11 +5,47 @@ from sklearn.metrics import (
     confusion_matrix, classification_report, roc_curve, auc,
     precision_recall_curve, mean_absolute_error, mean_squared_error, r2_score
 )
-from typing import Dict, List, Tuple, Union, Optional
-from models.model_manager import ProblemType
+from typing import Dict, List, Tuple, Union, Optional, Any
+from models.model_manager import ProblemType, ModelType
+from models.traditional_models import TraditionalModelWrapper
 
 class ModelEvaluator:
     """Handles model evaluation metrics and analysis"""
+    
+    @staticmethod
+    def get_feature_importance(model, feature_names: Optional[List[str]] = None) -> Optional[Dict[str, float]]:
+        """
+        Get feature importance from a model if available
+        
+        Args:
+            model: Model to extract feature importance from
+            feature_names: Optional list of feature names
+            
+        Returns:
+            Dictionary mapping feature names to importance values, or None if not available
+        """
+        # For traditional models wrapped in TraditionalModelWrapper
+        if isinstance(model, TraditionalModelWrapper):
+            if hasattr(model.model, 'get_feature_importance'):
+                return model.model.get_feature_importance()
+        
+        # For sklearn-based models
+        if hasattr(model, 'feature_importances_'):
+            importances = model.feature_importances_
+            if feature_names is None:
+                feature_names = [f"feature_{i}" for i in range(len(importances))]
+            return {name: float(imp) for name, imp in zip(feature_names, importances)}
+        
+        # For linear models
+        if hasattr(model, 'coef_'):
+            coefs = model.coef_
+            if len(coefs.shape) > 1:
+                coefs = np.mean(np.abs(coefs), axis=0)
+            if feature_names is None:
+                feature_names = [f"feature_{i}" for i in range(len(coefs))]
+            return {name: float(abs(coef)) for name, coef in zip(feature_names, coefs)}
+        
+        return None
     
     @staticmethod
     def evaluate_classification(

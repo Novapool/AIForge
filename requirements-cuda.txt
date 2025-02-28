@@ -18,6 +18,9 @@ plotly
 scikit-learn
 pillow
 openpyxl  # for Excel file support
+xgboost   # for XGBoost models
+lightgbm  # for LightGBM models
+joblib    # for model serialization
 
 # Visualization
 matplotlib  # for additional plotting capabilities
