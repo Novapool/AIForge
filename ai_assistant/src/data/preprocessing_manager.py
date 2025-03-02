@@ -135,7 +135,7 @@ class PreprocessingManager:
     
     def apply_operations(self, df: pd.DataFrame, file_id: str) -> pd.DataFrame:
         """
-        Apply preprocessing operations from state file to the DataFrame
+        Apply preprocessing operations from state file to the DataFrame and save to CSV
         
         Args:
             df: Input DataFrame
@@ -197,10 +197,22 @@ class PreprocessingManager:
                     if details.get('outlier_rules'):
                         transformation_rules['outlier_rules'].update(details['outlier_rules'])
             
-            # Update state file with transformation rules
+            # Save processed DataFrame to CSV
+            processed_data_dir = Path("ai_assistant/processed_data")
+            processed_data_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"processed_{state['dataset_name']}_{timestamp}.csv"
+            output_path = processed_data_dir / output_filename
+            
+            # Save to CSV
+            df.to_csv(output_path, index=False)
+            
+            # Update state file with transformation rules and output file path
             state["status"] = "completed"
             state["transformation_rules"] = self._convert_to_serializable(transformation_rules)
             state["completion_info"]["timestamp"] = datetime.now().isoformat()
+            state["completion_info"]["output_file"] = str(output_path)
             
             try:
                 with open(self._get_state_file_path(file_id), 'w') as f:

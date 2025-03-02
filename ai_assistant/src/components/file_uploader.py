@@ -1,3 +1,4 @@
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 from typing import Optional, List, Dict, Tuple
@@ -39,15 +40,22 @@ def file_uploader_component():
                     # Generate a unique file ID
                     file_id = f"{uploaded_file.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     
+                    # Save a copy of the file to disk for preprocessing
+                    processed_data_dir = Path("ai_assistant/processed_data")
+                    processed_data_dir.mkdir(parents=True, exist_ok=True)
+                    file_path = processed_data_dir / uploaded_file.name
+                    df.to_csv(file_path, index=False)
+                    
                     # Register the file
-                    SessionStateManager.register_file(
+                    registered_id = SessionStateManager.register_file(
                         file_id=file_id,
                         dataframe=df,
                         source='upload',
                         metadata={
                             'original_filename': uploaded_file.name,
                             'file_size': uploaded_file.size,
-                            'upload_method': 'single_file'
+                            'upload_method': 'single_file',
+                            'file_path': str(file_path)
                         }
                     )
                     
@@ -106,15 +114,22 @@ def file_uploader_component():
                             # Generate a unique file ID
                             file_id = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                             
+                            # Save a copy of the file to disk for preprocessing
+                            processed_data_dir = Path("ai_assistant/processed_data")
+                            processed_data_dir.mkdir(parents=True, exist_ok=True)
+                            file_path = processed_data_dir / name
+                            df.to_csv(file_path, index=False)
+                            
                             # Register the file
-                            SessionStateManager.register_file(
+                            registered_id = SessionStateManager.register_file(
                                 file_id=file_id,
                                 dataframe=df,
                                 source='directory',
                                 metadata={
                                     'original_filename': name,
                                     'directory_path': st.session_state['directory_path'],
-                                    'upload_method': 'directory'
+                                    'upload_method': 'directory',
+                                    'file_path': str(file_path)
                                 }
                             )
                             

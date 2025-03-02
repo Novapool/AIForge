@@ -45,7 +45,7 @@ class SessionStateManager:
             st.session_state['preprocessing_registry'] = {}
     
     @staticmethod
-    def register_file(file_id: str, dataframe: pd.DataFrame, source: str, metadata: Optional[Dict] = None) -> None:
+    def register_file(file_id: str, dataframe: pd.DataFrame, source: str, metadata: Optional[Dict] = None) -> str:
         """
         Register a new file in the file registry
         
@@ -54,9 +54,34 @@ class SessionStateManager:
             dataframe: The pandas DataFrame containing the file data
             source: Source of the file (e.g., 'upload', 'directory', 'preprocessing')
             metadata: Optional additional metadata about the file
+            
+        Returns:
+            The file_id of the registered file (may be different if a duplicate was found)
         """
         if 'file_registry' not in st.session_state:
             SessionStateManager.initialize()
+        
+        # Check if a file with the same original filename already exists
+        # Only do this check for non-preprocessing sources to avoid duplicating uploaded files
+        if source != 'preprocessing' and metadata and 'original_filename' in metadata:
+            original_filename = metadata.get('original_filename')
+            for existing_id, existing_file in st.session_state['file_registry'].items():
+                if (existing_file['metadata'].get('original_filename') == original_filename and 
+                    existing_file['source'] == source):
+                    # Update the existing file instead of creating a new one
+                    st.session_state['file_registry'][existing_id]['dataframe'] = dataframe
+                    st.session_state['file_registry'][existing_id]['last_accessed'] = datetime.now()
+                    st.session_state['file_registry'][existing_id]['shape'] = dataframe.shape
+                    st.session_state['file_registry'][existing_id]['columns'] = dataframe.columns.tolist()
+                    st.session_state['file_registry'][existing_id]['dtypes'] = {
+                        col: str(dtype) for col, dtype in dataframe.dtypes.items()
+                    }
+                    # Update metadata if needed
+                    if metadata:
+                        st.session_state['file_registry'][existing_id]['metadata'].update(metadata)
+                    
+                    SessionStateManager.set_active_file(existing_id)
+                    return existing_id
             
         # Create file entry with metadata
         st.session_state['file_registry'][file_id] = {
@@ -76,6 +101,8 @@ class SessionStateManager:
         # Set as active file if no active file exists
         if not st.session_state['active_file_id']:
             SessionStateManager.set_active_file(file_id)
+            
+        return file_id
     
     @staticmethod
     def set_active_file(file_id: str) -> None:

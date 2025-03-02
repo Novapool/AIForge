@@ -357,10 +357,34 @@ def render_preprocessing_tab():
                             'method': selected_method,
                             'columns': selected_cols
                         }
-                        file_id = st.session_state['preprocessing_manager'].save_state(
-                            selected_file_id,  # Use file_id instead of dataset name
-                            [operation]
-                        )
+                        
+                        # Check if there's already a pending state for this file
+                        existing_states = [
+                            state for state in st.session_state['preprocessing_manager'].list_states()
+                            if state['dataset_name'] == selected_file_id 
+                            and state['status'] == 'pending'
+                        ]
+                        
+                        if existing_states:
+                            # Use the existing state file
+                            existing_state = existing_states[-1]
+                            # Load the state
+                            state_data = st.session_state['preprocessing_manager'].load_state(existing_state['file_id'])
+                            # Add the new operation
+                            state_data['operations'].append({
+                                **operation,
+                                'timestamp': pd.Timestamp.now().isoformat()
+                            })
+                            # Save the updated state
+                            with open(st.session_state['preprocessing_manager']._get_state_file_path(existing_state['file_id']), 'w') as f:
+                                json.dump(state_data, f, indent=2)
+                            state_file_id = existing_state['file_id']
+                        else:
+                            # Create a new state file
+                            state_file_id = st.session_state['preprocessing_manager'].save_state(
+                                selected_file_id,  # Use file_id instead of dataset name
+                                [operation]
+                            )
                         
                         # Add to file's preprocessing history
                         SessionStateManager.add_preprocessing_step(
@@ -396,10 +420,34 @@ def render_preprocessing_tab():
                         'method': selected_method,
                         'columns': selected_cols
                     }
-                    file_id = st.session_state['preprocessing_manager'].save_state(
-                        selected_file_id,  # Use file_id instead of dataset name
-                        [operation]
-                    )
+                    
+                    # Check if there's already a pending state for this file
+                    existing_states = [
+                        state for state in st.session_state['preprocessing_manager'].list_states()
+                        if state['dataset_name'] == selected_file_id 
+                        and state['status'] == 'pending'
+                    ]
+                    
+                    if existing_states:
+                        # Use the existing state file
+                        existing_state = existing_states[-1]
+                        # Load the state
+                        state_data = st.session_state['preprocessing_manager'].load_state(existing_state['file_id'])
+                        # Add the new operation
+                        state_data['operations'].append({
+                            **operation,
+                            'timestamp': pd.Timestamp.now().isoformat()
+                        })
+                        # Save the updated state
+                        with open(st.session_state['preprocessing_manager']._get_state_file_path(existing_state['file_id']), 'w') as f:
+                            json.dump(state_data, f, indent=2)
+                        state_file_id = existing_state['file_id']
+                    else:
+                        # Create a new state file
+                        state_file_id = st.session_state['preprocessing_manager'].save_state(
+                            selected_file_id,  # Use file_id instead of dataset name
+                            [operation]
+                        )
                     
                     # Add to file's preprocessing history
                     SessionStateManager.add_preprocessing_step(
@@ -436,10 +484,34 @@ def render_preprocessing_tab():
                             'strategy': selected_strategy,
                             'columns': selected_cols
                         }
-                        file_id = st.session_state['preprocessing_manager'].save_state(
-                            selected_file_id,  # Use file_id instead of dataset name
-                            [operation]
-                        )
+                        
+                        # Check if there's already a pending state for this file
+                        existing_states = [
+                            state for state in st.session_state['preprocessing_manager'].list_states()
+                            if state['dataset_name'] == selected_file_id 
+                            and state['status'] == 'pending'
+                        ]
+                        
+                        if existing_states:
+                            # Use the existing state file
+                            existing_state = existing_states[-1]
+                            # Load the state
+                            state_data = st.session_state['preprocessing_manager'].load_state(existing_state['file_id'])
+                            # Add the new operation
+                            state_data['operations'].append({
+                                **operation,
+                                'timestamp': pd.Timestamp.now().isoformat()
+                            })
+                            # Save the updated state
+                            with open(st.session_state['preprocessing_manager']._get_state_file_path(existing_state['file_id']), 'w') as f:
+                                json.dump(state_data, f, indent=2)
+                            state_file_id = existing_state['file_id']
+                        else:
+                            # Create a new state file
+                            state_file_id = st.session_state['preprocessing_manager'].save_state(
+                                selected_file_id,  # Use file_id instead of dataset name
+                                [operation]
+                            )
                         
                         # Add to file's preprocessing history
                         SessionStateManager.add_preprocessing_step(
@@ -485,10 +557,34 @@ def render_preprocessing_tab():
                         'threshold': threshold,
                         'columns': selected_cols
                     }
-                    file_id = st.session_state['preprocessing_manager'].save_state(
-                        selected_file_id,  # Use file_id instead of dataset name
-                        [operation]
-                    )
+                    
+                    # Check if there's already a pending state for this file
+                    existing_states = [
+                        state for state in st.session_state['preprocessing_manager'].list_states()
+                        if state['dataset_name'] == selected_file_id 
+                        and state['status'] == 'pending'
+                    ]
+                    
+                    if existing_states:
+                        # Use the existing state file
+                        existing_state = existing_states[-1]
+                        # Load the state
+                        state_data = st.session_state['preprocessing_manager'].load_state(existing_state['file_id'])
+                        # Add the new operation
+                        state_data['operations'].append({
+                            **operation,
+                            'timestamp': pd.Timestamp.now().isoformat()
+                        })
+                        # Save the updated state
+                        with open(st.session_state['preprocessing_manager']._get_state_file_path(existing_state['file_id']), 'w') as f:
+                            json.dump(state_data, f, indent=2)
+                        state_file_id = existing_state['file_id']
+                    else:
+                        # Create a new state file
+                        state_file_id = st.session_state['preprocessing_manager'].save_state(
+                            selected_file_id,  # Use file_id instead of dataset name
+                            [operation]
+                        )
                     
                     # Add to file's preprocessing history
                     SessionStateManager.add_preprocessing_step(
@@ -551,41 +647,77 @@ def render_preprocessing_tab():
                             st.warning("No pending preprocessing operations found")
                             return
                         
-                        # Apply operations from each state
-                        df = SessionStateManager.get_dataframe(selected_file_id).copy(deep=True)
+                        # Get the original file information
+                        active_file = SessionStateManager.get_active_file()
+                        if not active_file:
+                            st.error("No active file found")
+                            return
                         
-                        for state in states:
-                            df = st.session_state['preprocessing_manager'].apply_operations(
-                                df,
-                                state['file_id']
-                            )
+                        # Get the original file path from metadata if available
+                        original_file_path = None
+                        if 'metadata' in active_file and 'output_csv_path' in active_file['metadata']:
+                            # If this is already a processed file, use its CSV path
+                            original_file_path = active_file['metadata']['output_csv_path']
+                        elif 'metadata' in active_file and 'original_filename' in active_file['metadata']:
+                            # Try to construct a path based on the original filename
+                            original_filename = active_file['metadata']['original_filename']
+                            # This is a simplification - in a real implementation, you'd need to track the actual file path
+                            original_file_path = f"ai_assistant/processed_data/{original_filename}"
                         
-                        # Generate a unique file ID for the processed data
-                        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                        processed_file_id = f"processed_{selected_file_id}_{timestamp}"
+                        # If we can't determine the original file path, create a temporary CSV
+                        if not original_file_path:
+                            # Create a temporary CSV file from the dataframe
+                            temp_dir = Path("ai_assistant/processed_data")
+                            temp_dir.mkdir(parents=True, exist_ok=True)
+                            temp_csv = temp_dir / f"temp_{selected_file_id}.csv"
+                            df = SessionStateManager.get_dataframe(selected_file_id)
+                            df.to_csv(temp_csv, index=False)
+                            original_file_path = str(temp_csv)
                         
-                        # Register the processed dataframe
-                        SessionStateManager.register_file(
-                            file_id=processed_file_id,
-                            dataframe=df,
-                            source='preprocessing',
-                            metadata={
-                                'original_file_id': selected_file_id,
-                                'preprocessing_timestamp': timestamp,
-                                'preprocessing_operations': len(states)
-                            }
+                        # Apply operations using the JSON state file directly
+                        last_state = states[-1]
+                        
+                        # Use apply_json_to_csv instead of apply_operations
+                        output_file_path = st.session_state['preprocessing_manager'].apply_json_to_csv(
+                            input_csv=original_file_path,
+                            state_file_id=last_state['file_id']
                         )
                         
-                        st.success(f"Preprocessing applied and new file created: {processed_file_id}")
-                        
-                        # Button to switch to the processed data
-                        if st.button("Use Processed Data"):
-                            SessionStateManager.set_active_file(processed_file_id)
-                            st.success(f"Now using processed dataset: {processed_file_id}")
-                            st.rerun()
+                        if output_file_path and os.path.exists(output_file_path):
+                            # Read the processed CSV file
+                            processed_df = pd.read_csv(output_file_path)
+                            
+                            # Generate a unique file ID for the processed data
+                            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                            processed_file_id = f"processed_{selected_file_id}_{timestamp}"
+                            
+                            # Register the processed dataframe
+                            SessionStateManager.register_file(
+                                file_id=processed_file_id,
+                                dataframe=processed_df,
+                                source='preprocessing',
+                                metadata={
+                                    'original_file_id': selected_file_id,
+                                    'preprocessing_timestamp': timestamp,
+                                    'preprocessing_operations': len(states),
+                                    'output_csv_path': output_file_path
+                                }
+                            )
+                            
+                            st.success(f"Preprocessing applied and new file created: {processed_file_id}")
+                            st.success(f"CSV file saved to: {output_file_path}")
+                            
+                            # Button to switch to the processed data
+                            if st.button("Use Processed Data"):
+                                SessionStateManager.set_active_file(processed_file_id)
+                                st.success(f"Now using processed dataset: {processed_file_id}")
+                                st.rerun()
+                        else:
+                            st.warning("Preprocessing completed but no output file was generated or found.")
                         
                     except Exception as e:
                         st.error(f"Error applying preprocessing: {str(e)}")
+                        st.error(f"Exception details: {type(e).__name__}: {str(e)}")
             
             with col2:
                 if st.button("Reset All"):
