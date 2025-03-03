@@ -677,7 +677,14 @@ def render_preprocessing_tab():
                         # Apply operations using the JSON state file directly
                         last_state = states[-1]
                         
-                        # Use apply_json_to_csv instead of apply_operations
+                        # STEP 1: First apply operations to generate transformation rules
+                        df = SessionStateManager.get_dataframe(selected_file_id)
+                        processed_df = st.session_state['preprocessing_manager'].apply_operations(
+                            df=df,
+                            file_id=last_state['file_id']
+                        )
+                        
+                        # STEP 2: Now apply the generated rules to the CSV
                         output_file_path = st.session_state['preprocessing_manager'].apply_json_to_csv(
                             input_csv=original_file_path,
                             state_file_id=last_state['file_id']

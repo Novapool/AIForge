@@ -149,6 +149,9 @@ class PreprocessingManager:
             raise ValueError(f"Invalid state or status for file_id: {file_id}")
         
         try:
+            print(f"Starting to apply operations for file_id: {file_id}")
+            print(f"Number of operations to apply: {len(state['operations'])}")
+            
             # Apply each operation in sequence and collect transformation rules
             transformation_rules = {
                 'encoding_maps': {},
@@ -159,6 +162,7 @@ class PreprocessingManager:
             
             for operation in state["operations"]:
                 op_type = operation["operation"]
+                print(f"Applying operation: {op_type}")
                 
                 if op_type == "encoding":
                     df, details = self.preprocessor.encode_categorical(
@@ -263,10 +267,14 @@ class PreprocessingManager:
             output_csv = f"{input_csv}_{timestamp}.csv"
         
         try:
+            print(f"Applying transformations from state file: {state_file_id}")
             rules = state["transformation_rules"]
+            print(f"Found transformation rules: {list(rules.keys())}")
             
             # Apply encoding transformations
+            print("Applying encoding transformations...")
             for col, mapping in rules.get('encoding_maps', {}).items():
+                print(f"  - Encoding column: {col} with type: {mapping['type']}")
                 if mapping['type'] == 'label':
                     df[col] = df[col].astype(str).map(mapping['values'])
                 elif mapping['type'] == 'onehot':
@@ -280,7 +288,9 @@ class PreprocessingManager:
                     df = df.drop(columns=[col])
             
             # Apply normalization transformations
+            print("Applying normalization transformations...")
             for col, params in rules.get('normalizations', {}).items():
+                print(f"  - Normalizing column: {col} with type: {params['type']}")
                 if params['type'] == 'standard':
                     df[col] = (df[col] - params['mean']) / params['std']
                 elif params['type'] == 'minmax':
@@ -289,11 +299,15 @@ class PreprocessingManager:
                     df[col] = (df[col] - params['center']) / params['scale']
             
             # Apply missing value rules
+            print("Applying missing value rules...")
             for col, rule in rules.get('missing_value_rules', {}).items():
+                print(f"  - Filling missing values in column: {col}")
                 df[col] = df[col].fillna(rule['fill_value'])
             
             # Apply outlier rules
+            print("Applying outlier rules...")
             for col, rule in rules.get('outlier_rules', {}).items():
+                print(f"  - Removing outliers in column: {col} using method: {rule['method']}")
                 if rule['method'] == 'zscore':
                     z_scores = np.abs((df[col] - rule['params']['mean']) / rule['params']['std'])
                     df = df[z_scores < rule['threshold']]
