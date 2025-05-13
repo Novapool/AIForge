@@ -1,0 +1,55 @@
+{
+  "name": "ai-assistant-mvp",
+  "version": "0.1.0",
+  "description": "AI Assistant MVP - Data Preprocessing",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-backend": "cd backend && pyinstaller --onefile --hidden-import fastapi --hidden-import uvicorn --hidden-import pandas --hidden-import sklearn app/main.py",
+    "build": "npm run build-backend && electron-builder",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.yourcompany.ai-assistant-mvp",
+    "productName": "AI Assistant MVP",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "preload.js",
+      "renderer.js",
+      "!backend/**/*",
+      "!dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  }
+}

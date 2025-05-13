@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        .upload-area:hover {
+            border-color: #2c3e50;
+        }
+        
+        .file-info {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #2c3e50;
+        }
+        
+        .preprocessing-controls {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .control-group select,
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .button {
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .button:hover {
+            background-color: #34495e;
+        }
+        
+        .button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        
+        .preview-table th,
+        .preview-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .preview-table th {
+            background-color: #f4f4f4;
+            font-weight: bold;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2c3e50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI Assistant MVP - Data Preprocessing</h1>
+    </div>
+    
+    <div class="container">
+        <!-- File Upload Section -->
+        <div class="section">
+            <h2>Upload CSV File</h2>
+            <div class="upload-area" id="uploadArea">
+                <p>Click to select or drag and drop a CSV file here</p>
+                <input type="file" id="fileInput" accept=".csv" style="display: none;">
+            </div>
+            <div id="fileInfo" class="file-info" style="display: none;"></div>
+        </div>
+        
+        <!-- Preprocessing Section -->
+        <div class="section" id="preprocessingSection" style="display: none;">
+            <h2>Preprocessing Options</h2>
+            
+            <div class="preprocessing-controls">
+                <!-- Categorical Encoding -->
+                <div class="control-group">
+                    <label>Categorical Encoding</label>
+                    <select id="encodingMethod">
+                        <option value="">None</option>
+                        <option value="label">Label Encoding</option>
+                        <option value="onehot">One-Hot Encoding</option>
+                    </select>
+                    <label style="margin-top: 10px;">Columns (comma separated)</label>
+                    <input type="text" id="encodingColumns" placeholder="Leave empty for all categorical columns">
+                </div>
+                
+                <!-- Normalization -->
+                <div class="control-group">
+                    <label>Normalization</label>
+                    <select id="normalizationMethod">
+                        <option value="">None</option>
+                        <option value="standard">Standard Scaler</option>
+                        <option value="minmax">Min-Max Scaler</option>
+                    </select>
+                    <label style="margin-top: 10px;">Columns (comma separated)</label>
+                    <input type="text" id="normalizationColumns" placeholder="Leave empty for all numeric columns">
+                </div>
+                
+                <!-- Missing Values -->
+                <div class="control-group">
+                    <label>Handle Missing Values</label>
+                    <select id="missingStrategy">
+                        <option value="">None</option>
+                        <option value="mean">Mean</option>
+                        <option value="median">Median</option>
+                        <option value="most_frequent">Most Frequent</option>
+                        <option value="constant">Constant</option>
+                    </select>
+                    <label style="margin-top: 10px;">Columns (comma separated)</label>
+                    <input type="text" id="missingColumns" placeholder="Leave empty for all columns with missing values">
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button class="button" id="processButton">Process Data</button>
+                <button class="button" id="downloadButton" style="display: none;">Download Processed File</button>
+            </div>
+            
+            <div id="status" class="status" style="display: none;"></div>
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Processing...</p>
+            </div>
+        </div>
+        
+        <!-- Preview Section -->
+        <div class="section" id="previewSection" style="display: none;">
+            <h2>Data Preview</h2>
+            <div id="preview"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentFileId = null;
+        let processedFileId = null;
+        
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const preprocessingSection = document.getElementById('preprocessingSection');
+        const previewSection = document.getElementById('previewSection');
+        const processButton = document.getElementById('processButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const status = document.getElementById('status');
+        const loading = document.getElementById('loading');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#2c3e50';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.csv')) {
+                handleFileUpload(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+        
+        async function handleFileUpload(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                showStatus('Uploading file...', 'success');
+                const response = await fetch(`${API_URL}/api/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                currentFileId = data.file_id;
+                displayFileInfo(data);
+                showPreview(data.preview);
+                preprocessingSection.style.display = 'block';
+                previewSection.style.display = 'block';
+                showStatus('File uploaded successfully!', 'success');
+            } catch (error) {
+                showStatus(`Error uploading file: ${error.message}`, 'error');
+            }
+        }
+        
+        function displayFileInfo(data) {
+            fileInfo.innerHTML = `
+                <h3>File Information</h3>
+                <p><strong>Filename:</strong> ${data.filename}</p>
+                <p><strong>Shape:</strong> ${data.shape[0]} rows × ${data.shape[1]} columns</p>
+                <p><strong>Columns:</strong> ${data.columns.join(', ')}</p>
+            `;
+            fileInfo.style.display = 'block';
+        }
+        
+        function showPreview(data) {
+            if (!data || data.length === 0) return;
+            
+            const preview = document.getElementById('preview');
+            const columns = Object.keys(data[0]);
+            
+            let html = '<table class="preview-table"><thead><tr>';
+            columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    html += `<td>${row[col] !== null ? row[col] : 'null'}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            preview.innerHTML = html;
+        }
+        
+        processButton.addEventListener('click', async () => {
+            const operations = [];
+            
+            // Categorical encoding
+            const encodingMethod = document.getElementById('encodingMethod').value;
+            if (encodingMethod) {
+                const columns = document.getElementById('encodingColumns').value
+                    .split(',')
+                    .map(col => col.trim())
+                    .filter(col => col);
+                
+                operations.push({
+                    type: 'encode_categorical',
+                    params: {
+                        method: encodingMethod,
+                        columns: columns.length > 0 ? columns : null
+                    }
+                });
+            }
+            
+            // Normalization
+            const normalizationMethod = document.getElementById('normalizationMethod').value;
+            if (normalizationMethod) {
+                const columns = document.getElementById('normalizationColumns').value
+                    .split(',')
+                    .map(col => col.trim())
+                    .filter(col => col);
+                
+                operations.push({
+                    type: 'normalize',
+                    params: {
+                        method: normalizationMethod,
+                        columns: columns.length > 0 ? columns : null
+                    }
+                });
+            }
+            
+            // Missing values
+            const missingStrategy = document.getElementById('missingStrategy').value;
+            if (missingStrategy) {
+                const columns = document.getElementById('missingColumns').value
+                    .split(',')
+                    .map(col => col.trim())
+                    .filter(col => col);
+                
+                operations.push({
+                    type: 'handle_missing',
+                    params: {
+                        strategy: missingStrategy,
+                        columns: columns.length > 0 ? columns : null
+                    }
+                });
+            }
+            
+            if (operations.length === 0) {
+                showStatus('Please select at least one preprocessing operation', 'error');
+                return;
+            }
+            
+            try {
+                loading.style.display = 'block';
+                processButton.disabled = true;
+                
+                const response = await fetch(`${API_URL}/api/preprocess/${currentFileId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(operations)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                processedFileId = data.file_id;
+                showPreview(data.preview);
+                showStatus('Data processed successfully!', 'success');
+                downloadButton.style.display = 'inline-block';
+            } catch (error) {
+                showStatus(`Error processing data: ${error.message}`, 'error');
+            } finally {
+                loading.style.display = 'none';
+                processButton.disabled = false;
+            }
+        });
+        
+        downloadButton.addEventListener('click', () => {
+            window.open(`${API_URL}/api/download/${processedFileId}`, '_blank');
+        });
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
