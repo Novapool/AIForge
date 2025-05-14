@@ -195,3 +195,12 @@ releases/
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
+
+
+backend/io
+backend/main.spec
+backend/np
+backend/os
+backend/pd
+backend/tempfile
+backend/uvicorn
