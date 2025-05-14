@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import io
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -96,7 +97,15 @@ app.add_middleware(
 preprocessor = DataPreprocessor()
 
 # Store uploaded files temporarily
-UPLOAD_DIR = Path("./uploads")
+# Use absolute path for packaged application
+if getattr(sys, 'frozen', False):
+    # Running in packaged mode
+    application_path = Path(sys._MEIPASS).parent
+    UPLOAD_DIR = application_path / "uploads"
+else:
+    # Running in development mode
+    UPLOAD_DIR = Path("./uploads")
+
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # In-memory storage for simple state management

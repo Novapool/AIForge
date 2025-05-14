@@ -1,4 +1,4 @@
-// main.js - Updated version that checks if backend is already running
+// main.js - Updated for packaging
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -34,6 +34,25 @@ function checkBackendHealth() {
   });
 }
 
+// Wait for backend to be ready
+function waitForBackend(retries = 30) {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    
+    const checkInterval = setInterval(async () => {
+      attempts++;
+      
+      if (await checkBackendHealth()) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (attempts >= retries) {
+        clearInterval(checkInterval);
+        reject(new Error('Backend failed to start'));
+      }
+    }, 1000);
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -41,11 +60,14 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
-    }
+    },
+    icon: path.join(__dirname, 'assets', 'icon.png') // Add if you have an icon
   });
 
+  // Load the HTML file
   mainWindow.loadFile('index.html');
 
+  // Open DevTools only in development
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
   }
@@ -63,44 +85,55 @@ async function startPythonBackend() {
     return;
   }
 
-  const script = path.join(__dirname, 'backend', 'app', 'main.py');
-  
   if (!app.isPackaged) {
+    // Development mode - run Python script directly
+    const script = path.join(__dirname, 'backend', 'app', 'main.py');
     pythonProcess = spawn('python', [script], {
       cwd: path.join(__dirname, 'backend')
     });
   } else {
-    const executable = process.platform === 'win32' 
-      ? path.join(process.resourcesPath, 'backend', 'main.exe')
-      : path.join(process.resourcesPath, 'backend', 'main');
+    // Production mode - run packaged executable
+    let executableName = 'main';
+    if (process.platform === 'win32') {
+      executableName = 'main.exe';
+    }
+    
+    const executable = path.join(process.resourcesPath, 'backend', executableName);
+    const executableDir = path.join(process.resourcesPath, 'backend');
     
     pythonProcess = spawn(executable, [], {
-      cwd: path.join(process.resourcesPath, 'backend')
+      cwd: executableDir
     });
   }
 
   if (pythonProcess) {
     pythonProcess.stdout.on('data', (data) => {
-      console.log(`Python stdout: ${data}`);
+      console.log(`Backend stdout: ${data}`);
     });
 
     pythonProcess.stderr.on('data', (data) => {
-      console.error(`Python stderr: ${data}`);
+      console.error(`Backend stderr: ${data}`);
     });
 
     pythonProcess.on('error', (error) => {
-      console.error(`Failed to start Python process: ${error}`);
+      console.error(`Failed to start backend: ${error}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+      console.log(`Backend process exited with code ${code}`);
     });
   }
 }
 
 app.on('ready', async () => {
-  await startPythonBackend();
-  
-  // Wait a bit for the backend to start (if it wasn't already running)
-  setTimeout(() => {
+  try {
+    await startPythonBackend();
+    await waitForBackend();
     createWindow();
-  }, 2000);
+  } catch (error) {
+    console.error('Failed to start application:', error);
+    app.quit();
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -110,8 +143,20 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  // Only kill the python process if we started it
+  // Kill the python process if we started it
   if (pythonProcess) {
+    console.log('Stopping backend...');
     pythonProcess.kill();
+  }
+});
+
+// Prevent app from exiting when windows are closed
+app.on('before-quit', (event) => {
+  if (pythonProcess) {
+    event.preventDefault();
+    pythonProcess.kill();
+    setTimeout(() => {
+      app.quit();
+    }, 1000);
   }
 });

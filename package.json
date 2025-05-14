@@ -5,11 +5,14 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build-backend": "cd backend && pyinstaller --onefile --hidden-import fastapi --hidden-import uvicorn --hidden-import pandas --hidden-import sklearn app/main.py",
+    "build-backend": "cd backend && pyinstaller main.spec --clean",
     "build": "npm run build-backend && electron-builder",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
   },
-  "keywords": [],
+  "keywords": ["ai", "data-preprocessing", "electron"],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
@@ -19,37 +22,60 @@
   "build": {
     "appId": "com.yourcompany.ai-assistant-mvp",
     "productName": "AI Assistant MVP",
+    "copyright": "Copyright © 2024 Your Company",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets"
     },
     "files": [
       "main.js",
       "index.html",
-      "preload.js",
-      "renderer.js",
       "!backend/**/*",
-      "!dist/**/*"
+      "!dist/**/*",
+      "!node_modules/**/*",
+      "!.venv/**/*",
+      "!**/.git/**/*",
+      "!**/*.py",
+      "!**/*.pyc",
+      "!**/__pycache__/**/*",
+      "!uploads/**/*"
     ],
     "extraResources": [
       {
         "from": "backend/dist",
         "to": "backend",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*", "!**/*.pyc", "!**/__pycache__/**/*"]
+      },
+      {
+        "from": "backend/uploads",
+        "to": "backend/uploads",
+        "filter": ["**/*"]
       }
     ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development"
     }
   }
 }

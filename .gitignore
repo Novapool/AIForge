@@ -198,9 +198,10 @@ releases/
 
 
 backend/io
-backend/main.spec
 backend/np
 backend/os
 backend/pd
 backend/tempfile
 backend/uvicorn
+
+scripts
