@@ -1,10 +1,38 @@
-// main.js
+// main.js - Updated version that checks if backend is already running
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const http = require('http');
 
 let mainWindow;
 let pythonProcess;
+
+// Check if backend is already running
+function checkBackendHealth() {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'localhost',
+      port: 8000,
+      path: '/',
+      method: 'GET',
+      timeout: 2000
+    };
+
+    const req = http.request(options, (res) => {
+      resolve(res.statusCode === 200);
+    });
+
+    req.on('error', () => {
+      resolve(false);
+    });
+
+    req.on('timeout', () => {
+      resolve(false);
+    });
+
+    req.end();
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -16,10 +44,8 @@ function createWindow() {
     }
   });
 
-  // Load the HTML file
   mainWindow.loadFile('index.html');
 
-  // Open DevTools in development
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
   }
@@ -29,16 +55,21 @@ function createWindow() {
   });
 }
 
-function startPythonBackend() {
+async function startPythonBackend() {
+  // Check if backend is already running
+  const isRunning = await checkBackendHealth();
+  if (isRunning) {
+    console.log('Backend is already running, skipping startup');
+    return;
+  }
+
   const script = path.join(__dirname, 'backend', 'app', 'main.py');
   
-  // In development, use python directly
   if (!app.isPackaged) {
     pythonProcess = spawn('python', [script], {
       cwd: path.join(__dirname, 'backend')
     });
   } else {
-    // In production, use the packaged executable
     const executable = process.platform === 'win32' 
       ? path.join(process.resourcesPath, 'backend', 'main.exe')
       : path.join(process.resourcesPath, 'backend', 'main');
@@ -48,23 +79,25 @@ function startPythonBackend() {
     });
   }
 
-  pythonProcess.stdout.on('data', (data) => {
-    console.log(`Python stdout: ${data}`);
-  });
+  if (pythonProcess) {
+    pythonProcess.stdout.on('data', (data) => {
+      console.log(`Python stdout: ${data}`);
+    });
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`Python stderr: ${data}`);
-  });
+    pythonProcess.stderr.on('data', (data) => {
+      console.error(`Python stderr: ${data}`);
+    });
 
-  pythonProcess.on('error', (error) => {
-    console.error(`Failed to start Python process: ${error}`);
-  });
+    pythonProcess.on('error', (error) => {
+      console.error(`Failed to start Python process: ${error}`);
+    });
+  }
 }
 
-app.on('ready', () => {
-  startPythonBackend();
+app.on('ready', async () => {
+  await startPythonBackend();
   
-  // Wait a bit for the backend to start
+  // Wait a bit for the backend to start (if it wasn't already running)
   setTimeout(() => {
     createWindow();
   }, 2000);
@@ -77,6 +110,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  // Only kill the python process if we started it
   if (pythonProcess) {
     pythonProcess.kill();
   }
