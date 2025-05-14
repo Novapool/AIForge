@@ -52,6 +52,11 @@
             border-color: #2c3e50;
         }
         
+        .upload-area.drag-over {
+            border-color: #2c3e50;
+            background-color: #f0f8ff;
+        }
+        
         .file-info {
             margin: 20px 0;
             padding: 10px;
@@ -268,16 +273,21 @@
         
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
-            uploadArea.style.borderColor = '#2c3e50';
+            e.stopPropagation();
+            uploadArea.classList.add('drag-over');
         });
         
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.borderColor = '#ccc';
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadArea.classList.remove('drag-over');
         });
         
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadArea.style.borderColor = '#ccc';
+            e.stopPropagation();
+            uploadArea.classList.remove('drag-over');
+            
             const files = e.dataTransfer.files;
             if (files.length > 0 && files[0].name.endsWith('.csv')) {
                 handleFileUpload(files[0]);
@@ -302,7 +312,8 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const error = await response.json();
+                    throw new Error(error.detail || `HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
@@ -314,6 +325,7 @@
                 showStatus('File uploaded successfully!', 'success');
             } catch (error) {
                 showStatus(`Error uploading file: ${error.message}`, 'error');
+                console.error('Upload error:', error);
             }
         }
         
@@ -423,7 +435,8 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const error = await response.json();
+                    throw new Error(error.detail || `HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
@@ -433,6 +446,7 @@
                 downloadButton.style.display = 'inline-block';
             } catch (error) {
                 showStatus(`Error processing data: ${error.message}`, 'error');
+                console.error('Processing error:', error);
             } finally {
                 loading.style.display = 'none';
                 processButton.disabled = false;

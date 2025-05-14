@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 import uvicorn
+import json
 
 # Import your existing data preprocessor
 # We'll copy its content and simplify it for the MVP
@@ -50,7 +51,8 @@ class DataPreprocessor:
         else:
             return df_normalized
         
-        df_normalized[columns] = scaler.fit_transform(df_normalized[columns])
+        if columns:  # Only process if there are columns to normalize
+            df_normalized[columns] = scaler.fit_transform(df_normalized[columns])
         return df_normalized
     
     def handle_missing_values(self, df: pd.DataFrame, strategy: str = 'mean', columns: Optional[List[str]] = None):
@@ -100,6 +102,24 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # In-memory storage for simple state management
 uploaded_files: Dict[str, pd.DataFrame] = {}
 
+# Helper function to convert DataFrame to JSON-safe format
+def dataframe_to_json_safe(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert DataFrame to JSON-safe format by replacing NaN values"""
+    # Create a copy to avoid modifying the original
+    df_copy = df.copy()
+    
+    # Replace NaN values in numeric columns with None (which becomes null in JSON)
+    numeric_columns = df_copy.select_dtypes(include=[np.number]).columns
+    for col in numeric_columns:
+        df_copy[col] = df_copy[col].replace({np.nan: None})
+    
+    # Replace NaN values in non-numeric columns with None
+    non_numeric_columns = df_copy.select_dtypes(exclude=[np.number]).columns
+    for col in non_numeric_columns:
+        df_copy[col] = df_copy[col].replace({np.nan: None})
+    
+    return df_copy
+
 @app.get("/")
 async def root():
     return {"message": "AI Assistant MVP - Data Preprocessing API"}
@@ -123,13 +143,16 @@ async def upload_file(file: UploadFile = File(...)):
         file_path = UPLOAD_DIR / file.filename
         df.to_csv(file_path, index=False)
         
+        # Prepare JSON-safe data
+        df_safe = dataframe_to_json_safe(df)
+        
         return {
             "file_id": file_id,
             "filename": file.filename,
             "shape": df.shape,
             "columns": df.columns.tolist(),
             "dtypes": df.dtypes.astype(str).to_dict(),
-            "preview": df.head(5).to_dict('records')
+            "preview": df_safe.head(5).to_dict('records')
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -153,20 +176,25 @@ async def get_file_info(file_id: str):
         raise HTTPException(status_code=404, detail="File not found")
     
     df = uploaded_files[file_id]
+    df_safe = dataframe_to_json_safe(df)
     
     # Calculate basic statistics
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    
+    # Get missing values count (converting to int for JSON serialization)
+    missing_values = df.isnull().sum().to_dict()
+    missing_values = {k: int(v) for k, v in missing_values.items()}
     
     return {
         "file_id": file_id,
         "shape": df.shape,
         "columns": df.columns.tolist(),
         "dtypes": df.dtypes.astype(str).to_dict(),
-        "missing_values": df.isnull().sum().to_dict(),
+        "missing_values": missing_values,
         "numeric_columns": numeric_cols,
         "categorical_columns": categorical_cols,
-        "preview": df.head(10).to_dict('records')
+        "preview": df_safe.head(10).to_dict('records')
     }
 
 @app.post("/api/preprocess/{file_id}")
@@ -209,13 +237,18 @@ async def preprocess_file(file_id: str, operations: List[Dict]):
         output_path = UPLOAD_DIR / f"preprocessed_{file_id}.csv"
         df.to_csv(output_path, index=False)
         
+        # Prepare JSON-safe data
+        df_safe = dataframe_to_json_safe(df)
+        
         return {
             "file_id": output_filename,
             "shape": df.shape,
             "columns": df.columns.tolist(),
-            "preview": df.head(5).to_dict('records')
+            "preview": df_safe.head(5).to_dict('records')
         }
     except Exception as e:
+        import traceback
+        print(f"Error in preprocessing: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/download/{file_id}")

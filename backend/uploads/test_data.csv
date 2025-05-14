@@ -1,0 +1,5 @@
+name,age,city,salary
+John,30.0,New York,
+Jane,25.0,Boston,75000.0
+Bob,,Chicago,60000.0
+Alice,35.0,Seattle,85000.0
