@@ -12,7 +12,11 @@
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux"
   },
-  "keywords": ["ai", "data-preprocessing", "electron"],
+  "keywords": [
+    "ai",
+    "data-preprocessing",
+    "electron"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
@@ -44,12 +48,18 @@
       {
         "from": "backend/dist",
         "to": "backend",
-        "filter": ["**/*", "!**/*.pyc", "!**/__pycache__/**/*"]
+        "filter": [
+          "**/*",
+          "!**/*.pyc",
+          "!**/__pycache__/**/*"
+        ]
       },
       {
         "from": "backend/uploads",
         "to": "backend/uploads",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
