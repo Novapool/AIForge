@@ -8,17 +8,17 @@ rmdir /s /q dist
 rmdir /s /q backend\dist
 rmdir /s /q backend\build
 
+REM Create virtual environment if it doesn't exist at root level
+if not exist ".venv" (
+    python -m venv .venv
+)
+
+REM Activate virtual environment from root
+call .venv\Scripts\activate
+
 REM Build Backend
 echo Building Python backend...
 cd backend
-
-REM Create virtual environment if it doesn't exist
-if not exist "venv" (
-    python -m venv venv
-)
-
-REM Activate virtual environment
-call venv\Scripts\activate
 
 REM Install requirements
 pip install -r requirements.txt

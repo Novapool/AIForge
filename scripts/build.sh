@@ -8,17 +8,17 @@ rm -rf dist/
 rm -rf backend/dist/
 rm -rf backend/build/
 
+# Create virtual environment if it doesn't exist at root level
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+fi
+
+# Activate virtual environment from root
+source .venv/bin/activate
+
 # Build Backend
 echo "Building Python backend..."
 cd backend
-
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-fi
-
-# Activate virtual environment
-source venv/bin/activate
 
 # Install requirements
 pip install -r requirements.txt
