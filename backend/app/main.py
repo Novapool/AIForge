@@ -1,4 +1,4 @@
-# backend/app/main.py
+# backend/app/main.py - Updated for better compatibility with Electron
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -12,6 +12,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import uvicorn
 import json
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # Import your existing data preprocessor
 # We'll copy its content and simplify it for the MVP
@@ -87,10 +96,10 @@ app = FastAPI(title="AI Assistant MVP - Data Preprocessing")
 # Add CORS middleware for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Initialize data preprocessor
@@ -100,13 +109,24 @@ preprocessor = DataPreprocessor()
 # Use absolute path for packaged application
 if getattr(sys, 'frozen', False):
     # Running in packaged mode
+    logger.info("Running in packaged mode")
     application_path = Path(sys._MEIPASS).parent
     UPLOAD_DIR = application_path / "uploads"
 else:
     # Running in development mode
+    logger.info("Running in development mode")
     UPLOAD_DIR = Path("./uploads")
 
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Ensure upload directory exists
+try:
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    logger.info(f"Upload directory: {UPLOAD_DIR.absolute()}")
+except Exception as e:
+    logger.error(f"Failed to create upload directory: {e}")
+    # Use a fallback directory in /tmp
+    UPLOAD_DIR = Path(tempfile.gettempdir()) / "ai_assistant_uploads"
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    logger.info(f"Using fallback upload directory: {UPLOAD_DIR.absolute()}")
 
 # In-memory storage for simple state management
 uploaded_files: Dict[str, pd.DataFrame] = {}
@@ -131,18 +151,31 @@ def dataframe_to_json_safe(df: pd.DataFrame) -> pd.DataFrame:
 
 @app.get("/")
 async def root():
-    return {"message": "AI Assistant MVP - Data Preprocessing API"}
+    logger.info("Root endpoint accessed")
+    return {"message": "AI Assistant MVP - Data Preprocessing API", "status": "ok"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Electron to verify the API is running"""
+    logger.info("Health check endpoint accessed")
+    return {"status": "healthy"}
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Upload a CSV file"""
+    logger.info(f"File upload request received: {file.filename}")
+    
     if not file.filename.endswith('.csv'):
+        logger.warning(f"Rejected non-CSV file: {file.filename}")
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     
     try:
         # Read the file
         contents = await file.read()
+        logger.info(f"File read successfully: {file.filename}")
+        
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        logger.info(f"CSV parsed successfully: {file.filename}, shape: {df.shape}")
         
         # Store in memory
         file_id = file.filename
@@ -151,6 +184,7 @@ async def upload_file(file: UploadFile = File(...)):
         # Save to disk for later use
         file_path = UPLOAD_DIR / file.filename
         df.to_csv(file_path, index=False)
+        logger.info(f"File saved to disk: {file_path}")
         
         # Prepare JSON-safe data
         df_safe = dataframe_to_json_safe(df)
@@ -164,11 +198,13 @@ async def upload_file(file: UploadFile = File(...)):
             "preview": df_safe.head(5).to_dict('records')
         }
     except Exception as e:
+        logger.error(f"Error processing file upload: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/files")
 async def list_files():
     """List uploaded files"""
+    logger.info("List files endpoint accessed")
     return [
         {
             "file_id": file_id,
@@ -181,7 +217,10 @@ async def list_files():
 @app.get("/api/files/{file_id}")
 async def get_file_info(file_id: str):
     """Get detailed file information"""
+    logger.info(f"File info requested for: {file_id}")
+    
     if file_id not in uploaded_files:
+        logger.warning(f"File not found: {file_id}")
         raise HTTPException(status_code=404, detail="File not found")
     
     df = uploaded_files[file_id]
@@ -209,7 +248,10 @@ async def get_file_info(file_id: str):
 @app.post("/api/preprocess/{file_id}")
 async def preprocess_file(file_id: str, operations: List[Dict]):
     """Apply preprocessing operations to a file"""
+    logger.info(f"Preprocessing requested for: {file_id} with operations: {operations}")
+    
     if file_id not in uploaded_files:
+        logger.warning(f"File not found for preprocessing: {file_id}")
         raise HTTPException(status_code=404, detail="File not found")
     
     df = uploaded_files[file_id].copy()
@@ -218,6 +260,8 @@ async def preprocess_file(file_id: str, operations: List[Dict]):
         for operation in operations:
             op_type = operation.get("type")
             params = operation.get("params", {})
+            
+            logger.info(f"Applying operation: {op_type} with params: {params}")
             
             if op_type == "encode_categorical":
                 df = preprocessor.encode_categorical(
@@ -245,6 +289,7 @@ async def preprocess_file(file_id: str, operations: List[Dict]):
         # Save to disk
         output_path = UPLOAD_DIR / f"preprocessed_{file_id}.csv"
         df.to_csv(output_path, index=False)
+        logger.info(f"Preprocessed file saved: {output_path}")
         
         # Prepare JSON-safe data
         df_safe = dataframe_to_json_safe(df)
@@ -256,21 +301,24 @@ async def preprocess_file(file_id: str, operations: List[Dict]):
             "preview": df_safe.head(5).to_dict('records')
         }
     except Exception as e:
-        import traceback
-        print(f"Error in preprocessing: {traceback.format_exc()}")
+        logger.error(f"Error in preprocessing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/download/{file_id}")
 async def download_file(file_id: str):
     """Download a processed file"""
+    logger.info(f"File download requested: {file_id}")
+    
     file_path = UPLOAD_DIR / f"{file_id}.csv"
     
     if not file_path.exists():
         # Try with .csv extension
         file_path = UPLOAD_DIR / f"{file_id}"
         if not file_path.exists():
+            logger.warning(f"File not found for download: {file_id}")
             raise HTTPException(status_code=404, detail="File not found")
     
+    logger.info(f"Serving file: {file_path}")
     return FileResponse(
         path=str(file_path),
         filename=f"{file_id}.csv",
@@ -278,5 +326,10 @@ async def download_file(file_id: str):
     )
 
 if __name__ == "__main__":
-    # This is for development. PyInstaller will use a different entry point
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import platform
+    logger.info(f"Starting server on platform: {platform.system()}")
+    logger.info(f"Python version: {platform.python_version()}")
+    logger.info(f"Working directory: {os.getcwd()}")
+    
+    # Start the uvicorn server
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

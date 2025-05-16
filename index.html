@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,6 +173,27 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .connection-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border: 1px solid #f5c6cb;
+            text-align: center;
+        }
+        
+        .connection-success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border: 1px solid #c3e6cb;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -180,6 +202,16 @@
     </div>
     
     <div class="container">
+        <!-- API Connection Status -->
+        <div id="connectionError" class="connection-error" style="display: none;">
+            <p>Could not connect to the backend API. Please make sure the backend is running.</p>
+            <button class="button" id="retryConnection" style="margin-top: 10px;">Retry Connection</button>
+        </div>
+        
+        <div id="connectionSuccess" class="connection-success">
+            <p>Successfully connected to the backend API.</p>
+        </div>
+        
         <!-- File Upload Section -->
         <div class="section">
             <h2>Upload CSV File</h2>
@@ -254,11 +286,16 @@
     </div>
     
     <script>
+        // Default API URL with fallback to localhost
         const API_URL = 'http://localhost:8000';
         let currentFileId = null;
         let processedFileId = null;
+        let apiConnected = false;
         
-        // File upload handling
+        // DOM Elements
+        const connectionError = document.getElementById('connectionError');
+        const connectionSuccess = document.getElementById('connectionSuccess');
+        const retryConnection = document.getElementById('retryConnection');
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
@@ -269,6 +306,42 @@
         const status = document.getElementById('status');
         const loading = document.getElementById('loading');
         
+        // Check API connection on page load
+        document.addEventListener('DOMContentLoaded', checkApiConnection);
+        
+        // Retry connection button
+        retryConnection.addEventListener('click', checkApiConnection);
+        
+        // Check if the API is running
+        async function checkApiConnection() {
+            try {
+                connectionError.style.display = 'none';
+                
+                const response = await fetch(`${API_URL}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    apiConnected = true;
+                    connectionSuccess.style.display = 'block';
+                    setTimeout(() => {
+                        connectionSuccess.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error('API health check failed');
+                }
+            } catch (error) {
+                console.error('API connection error:', error);
+                apiConnected = false;
+                connectionError.style.display = 'block';
+            }
+        }
+        
+        // File upload event handlers
         uploadArea.addEventListener('click', () => fileInput.click());
         
         uploadArea.addEventListener('dragover', (e) => {
@@ -288,6 +361,11 @@
             e.stopPropagation();
             uploadArea.classList.remove('drag-over');
             
+            if (!apiConnected) {
+                showStatus('Cannot upload file - API is not connected. Please retry the connection.', 'error');
+                return;
+            }
+            
             const files = e.dataTransfer.files;
             if (files.length > 0 && files[0].name.endsWith('.csv')) {
                 handleFileUpload(files[0]);
@@ -295,6 +373,11 @@
         });
         
         fileInput.addEventListener('change', (e) => {
+            if (!apiConnected) {
+                showStatus('Cannot upload file - API is not connected. Please retry the connection.', 'error');
+                return;
+            }
+            
             if (e.target.files.length > 0) {
                 handleFileUpload(e.target.files[0]);
             }
@@ -306,6 +389,7 @@
             
             try {
                 showStatus('Uploading file...', 'success');
+                
                 const response = await fetch(`${API_URL}/api/upload`, {
                     method: 'POST',
                     body: formData
@@ -326,6 +410,9 @@
             } catch (error) {
                 showStatus(`Error uploading file: ${error.message}`, 'error');
                 console.error('Upload error:', error);
+                
+                // Check if API is still connected
+                checkApiConnection();
             }
         }
         
@@ -345,7 +432,7 @@
             const preview = document.getElementById('preview');
             const columns = Object.keys(data[0]);
             
-            let html = '<table class="preview-table"><thead><tr>';
+            let html = '<div style="overflow-x: auto;"><table class="preview-table"><thead><tr>';
             columns.forEach(col => {
                 html += `<th>${col}</th>`;
             });
@@ -359,11 +446,17 @@
                 html += '</tr>';
             });
             
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
             preview.innerHTML = html;
         }
         
         processButton.addEventListener('click', async () => {
+            if (!apiConnected) {
+                showStatus('Cannot process data - API is not connected. Please retry the connection.', 'error');
+                await checkApiConnection();
+                return;
+            }
+            
             const operations = [];
             
             // Categorical encoding
@@ -447,6 +540,9 @@
             } catch (error) {
                 showStatus(`Error processing data: ${error.message}`, 'error');
                 console.error('Processing error:', error);
+                
+                // Check if API is still connected
+                checkApiConnection();
             } finally {
                 loading.style.display = 'none';
                 processButton.disabled = false;
@@ -454,6 +550,12 @@
         });
         
         downloadButton.addEventListener('click', () => {
+            if (!apiConnected) {
+                showStatus('Cannot download file - API is not connected. Please retry the connection.', 'error');
+                checkApiConnection();
+                return;
+            }
+            
             window.open(`${API_URL}/api/download/${processedFileId}`, '_blank');
         });
         
@@ -462,9 +564,12 @@
             status.className = `status ${type}`;
             status.style.display = 'block';
             
-            setTimeout(() => {
-                status.style.display = 'none';
-            }, 5000);
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
         }
     </script>
 </body>

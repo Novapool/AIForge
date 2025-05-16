@@ -7,7 +7,13 @@ from pathlib import Path
 block_cipher = None
 
 # Determine the root directory
-root_dir = os.path.abspath(os.path.dirname(__file__))
+try:
+    # When run directly
+    root_dir = os.path.abspath(os.path.dirname(__file__))
+except NameError:
+    # When run with pyinstaller command
+    import sys
+    root_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
 uploads_dir = os.path.join(root_dir, 'uploads')
 
 # Create uploads directory if it doesn't exist
